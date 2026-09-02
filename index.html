@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSR Edge — Project Documentation</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="shell">
+
+<!-- ══════════════════════════════════════════════════ SIDEBAR ══════════ -->
+<aside class="sidebar">
+  <div class="brand">
+    <h1 class="brand-title"><span class="brand-dot"></span>VSR Edge</h1>
+    <p class="brand-sub">windfall-greengrass-components</p>
+  </div>
+
+  <div class="nav-search">
+    <input type="text" id="navSearch" placeholder="Filter sections…" autocomplete="off">
+  </div>
+
+  <nav id="nav">
+    <div class="nav-group">Samajhna</div>
+    <ul>
+      <li><a href="#tldr"><span class="n">00</span>TL;DR</a></li>
+      <li><a href="#glossary"><span class="n">01</span>Glossary</a></li>
+      <li><a href="#bigpicture"><span class="n">02</span>Big Picture</a></li>
+      <li><a href="#greengrass"><span class="n">03</span>Greengrass 101</a></li>
+      <li><a href="#phd"><span class="n">04</span>PHD Source</a></li>
+    </ul>
+
+    <div class="nav-group">Codebase</div>
+    <ul>
+      <li><a href="#components"><span class="n">05</span>The 4 Components</a></li>
+      <li><a href="#domain"><span class="n">06</span>Valve Domain Logic</a></li>
+      <li><a href="#statemachine"><span class="n">07</span>State Machine</a></li>
+      <li><a href="#grading"><span class="n">08</span>Grading &amp; Outputs</a></li>
+    </ul>
+
+    <div class="nav-group">Ticket</div>
+    <ul>
+      <li><a href="#state"><span class="n">09</span>State &amp; Durability</a></li>
+      <li><a href="#failure"><span class="n">10</span>Failure Modes</a></li>
+      <li><a href="#drgap"><span class="n">11</span>DR Doc vs Code</a></li>
+      <li><a href="#plan"><span class="n">12</span>Action Plan</a></li>
+    </ul>
+
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="#cicd"><span class="n">13</span>Build &amp; Deploy</a></li>
+      <li><a href="#repomap"><span class="n">14</span>Repo Map</a></li>
+      <li><a href="#cheatsheet"><span class="n">15</span>Cheat Sheet</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<!-- ═════════════════════════════════════════════════════ MAIN ══════════ -->
+<main class="main">
+
+<div class="topbar">
+  <div class="crumbs">Woodside &nbsp;/&nbsp; Fuse Platform &nbsp;/&nbsp; <b>Windfall VSR Edge</b></div>
+  <button class="theme-toggle" id="themeToggle">◐&nbsp; Theme</button>
+</div>
+
+<h1>Valve Shutdown Reporting — Edge Platform</h1>
+<p class="lede">
+  Pluto LNG plant ke <strong>safety shutdown valves</strong> kitni tezi se apni safe position tak
+  pahunchte hain — ye measure karne wala edge system. Chaar AWS IoT Greengrass components,
+  plant ke andar chalte hain, aur result cloud par bhejte hain.
+  Ye page repo + DR document dono ka <strong>ek jagah summary</strong> hai.
+</p>
+
+<div class="grid c4">
+  <div class="card stat"><span class="v">4</span><span class="l">Components</span></div>
+  <div class="card stat"><span class="v">6</span><span class="l">State files</span></div>
+  <div class="card stat"><span class="v">0</span><span class="l">Backed up</span></div>
+  <div class="card stat"><span class="v">P1</span><span class="l">Criticality</span></div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────── 00 TLDR ── -->
+<section id="tldr">
+  <h2><span class="num">00</span>TL;DR — 60 second version</h2>
+
+  <p>
+    Plant mein <strong>shutdown valves</strong> lage hain. Emergency mein inhe apni safe position
+    (open ya close) par pahunchna hota hai. Kitne <em>seconds</em> lage — usko
+    <strong>stroke time</strong> kehte hain. Agar valve slow ho raha hai, matlab wo ghis raha hai —
+    maintenance chahiye. Ye system wahi stroke time automatically measure karta hai.
+  </p>
+
+  <div class="note">
+    <div class="note-title">Ek line mein</div>
+    <p style="margin:0">
+      PHD historian se valve events padho <span class="mono-sm">→</span> filter karo
+      <span class="mono-sm">→</span> state machine chalao <span class="mono-sm">→</span>
+      stroke time nikaalo <span class="mono-sm">→</span> PASS/FAIL grade karo
+      <span class="mono-sm">→</span> SiteWise par publish karo. <strong>Sab kuch plant ke andar,
+      edge par.</strong>
+    </p>
+    <p style="margin:10px 0 0">
+      Is line ka <strong>har step kis component ke andar chalta hai</strong> —
+      <a href="#components">section 05</a> mein step-by-step breakdown hai.
+    </p>
+  </div>
+
+  <h3>Aapka ticket kya hai</h3>
+  <p>
+    Har component apni <strong>state file</strong> disk par likhta hai — sabse important hai
+    <strong>cursor</strong>, yaani "PHD mein kahan tak padh liya". Ye file
+    <strong>kahin backup nahi hoti</strong>. Agar edge device ka disk gaya, cursor gaya —
+    aur collector <code>now &minus; 2 minutes</code> se dobara shuru karta hai.
+  </p>
+
+  <div class="note danger">
+    <div class="note-title">⚠ Core problem</div>
+    <p style="margin:0">
+      Device loss = <strong>permanent data gap</strong> jitni der outage chala. Duplicate nahi —
+      <em>gap</em>. Aur ye sirf ek WARNING log chhodta hai, koi alarm nahi.
+      Yahi <a href="#drgap">DR document ka R1 risk</a> hai aur yahi fix karna hai.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────── 01 GLOSSARY ── -->
+<section id="glossary">
+  <h2><span class="num">01</span>Glossary — pehle ye shabd samajh lo</h2>
+
+  <p>Repo padhne se pehle ye terms zaroori hain. Baaki sab isi par khada hai.</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:130px">Term</th><th style="width:230px">Full form</th><th>Matlab</th></tr></thead>
+    <tbody>
+      <tr><td><strong>VSR</strong></td><td>Valve Shutdown Reporting</td><td>Poore project ka naam. Shutdown valves ki performance report karna.</td></tr>
+      <tr><td><strong>PHD</strong></td><td>Process History Database</td><td>Honeywell Uniformance ka plant historian. Plant mein jo hua sab record karta hai. Hamara data source.</td></tr>
+      <tr><td><strong>Greengrass</strong></td><td>AWS IoT Greengrass V2</td><td>Edge runtime — cloud ka code plant ke device par chalata hai. <a href="#greengrass">Detail</a></td></tr>
+      <tr><td><strong>SiteWise</strong></td><td>AWS IoT SiteWise</td><td>Industrial time-series database. Yahan final results jaate hain.</td></tr>
+      <tr><td><strong>Stroke</strong></td><td>&mdash;</td><td>Valve ka ek complete open/close movement. Command se lekar confirmation tak.</td></tr>
+      <tr><td><strong>Stroke time</strong></td><td>&mdash;</td><td>Us movement mein laga time, <strong>milliseconds</strong> mein. Yahi main output hai.</td></tr>
+      <tr><td><strong>Trip</strong></td><td>&mdash;</td><td>Shutdown command. "Valve ko abhi safe position par le jao."</td></tr>
+      <tr><td><strong>TRIGGER</strong></td><td>&mdash;</td><td>Wo tag jo trip command carry karta hai. Stroke ka <strong>start</strong>.</td></tr>
+      <tr><td><strong>SR</strong></td><td>Seat Reached <span class="pill grey">inferred</span></td><td>Close-side limit switch. Repo warnings isse <em>"close switch"</em> kehti hain.</td></tr>
+      <tr><td><strong>LIFT</strong></td><td>&mdash; <span class="pill grey">inferred</span></td><td>Open-side limit switch. Repo warnings isse <em>"open switch"</em> kehti hain.</td></tr>
+      <tr><td><strong>HS</strong></td><td>Hand Switch</td><td>Operator ka physical switch. 2&ndash;3 second ka pulse deta hai, phir NORMAL par wapas.</td></tr>
+      <tr><td><strong>MATT</strong></td><td>Min Acceptable Timing Threshold</td><td>Isse tez = <span class="pill red">FAIL FAST</span> (shayad sensor glitch).</td></tr>
+      <tr><td><strong>MERT</strong></td><td>Max Expected Response Time</td><td>Iske andar = <span class="pill green">PASS</span>.</td></tr>
+      <tr><td><strong>MART</strong></td><td>Max Acceptable Response Time</td><td>Iske baad = <span class="pill red">FAIL</span>.</td></tr>
+      <tr><td><strong>Cursor</strong></td><td>&mdash;</td><td>"PHD mein kahan tak padha" ka pointer. <strong>Sabse critical state.</strong></td></tr>
+      <tr><td><strong>GDK</strong></td><td>Greengrass Development Kit</td><td>CLI jo component build + S3 par publish karta hai.</td></tr>
+      <tr><td><strong>OT</strong></td><td>Operational Technology</td><td>Plant-side engineering team. Hardware, network, PHD unka hai — hamara nahi.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────── 02 BIG PICTURE ── -->
+<section id="bigpicture">
+  <h2><span class="num">02</span>Big Picture — data kahan se kahan jaata hai</h2>
+
+  <h3>Part A — Edge pipeline (plant ke andar)</h3>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1160 290" role="img" aria-label="Edge pipeline diagram">
+      <defs>
+        <marker id="f1a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+        <marker id="f1m" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-mut"/>
+        </marker>
+      </defs>
+
+      <rect x="15" y="30" width="1130" height="238" rx="10" class="svg-zone"/>
+      <text x="30" y="50" class="svg-t-lbl">OT ENVIRONMENT · PLUTO LNG PLANT</text>
+
+      <rect x="182" y="66" width="953" height="192" rx="8" class="svg-zone"/>
+      <text x="196" y="84" class="svg-t-lbl">GREENGRASS CORE DEVICE &#8212; /greengrass/v2</text>
+
+      <!-- PHD -->
+      <rect x="28" y="104" width="138" height="58" rx="6" class="svg-box-m"/>
+      <text x="97" y="128" class="svg-t-b" text-anchor="middle">PHD Buffer</text>
+      <text x="97" y="146" class="svg-t-s" text-anchor="middle">SQL Server</text>
+
+      <!-- collector -->
+      <rect x="205" y="104" width="145" height="58" rx="6" class="svg-box-a"/>
+      <text x="277" y="127" class="svg-t-b" text-anchor="middle">collector</text>
+      <text x="277" y="145" class="svg-t-s" text-anchor="middle">cursor + poll</text>
+
+      <!-- filter -->
+      <rect x="385" y="104" width="145" height="58" rx="6" class="svg-box-a"/>
+      <text x="457" y="127" class="svg-t-b" text-anchor="middle">data-filter</text>
+      <text x="457" y="145" class="svg-t-s" text-anchor="middle">tag match + dedup</text>
+
+      <!-- stream -->
+      <rect x="565" y="104" width="145" height="58" rx="6" class="svg-box-b"/>
+      <text x="637" y="127" class="svg-t-b" text-anchor="middle">VSR_STREAM</text>
+      <text x="637" y="145" class="svg-t-s" text-anchor="middle">StreamManager</text>
+
+      <!-- calculator -->
+      <rect x="745" y="104" width="145" height="58" rx="6" class="svg-box-a"/>
+      <text x="817" y="127" class="svg-t-b" text-anchor="middle">vsr-calculator</text>
+      <text x="817" y="145" class="svg-t-s" text-anchor="middle">state machine</text>
+
+      <!-- out -->
+      <rect x="925" y="104" width="185" height="58" rx="6" class="svg-box-g"/>
+      <text x="1017" y="127" class="svg-t-b" text-anchor="middle">SiteWise Edge</text>
+      <text x="1017" y="145" class="svg-t-s" text-anchor="middle">MQTT publish</text>
+
+      <!-- arrows -->
+      <line x1="166" y1="133" x2="199" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="350" y1="133" x2="379" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="530" y1="133" x2="559" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="710" y1="133" x2="739" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="890" y1="133" x2="919" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
+
+      <text x="182" y="98"  class="svg-t-lbl" text-anchor="middle">ODBC 60s</text>
+      <text x="364" y="98"  class="svg-t-lbl" text-anchor="middle">MQTT</text>
+      <text x="545" y="98"  class="svg-t-lbl" text-anchor="middle">append</text>
+      <text x="724" y="98"  class="svg-t-lbl" text-anchor="middle">read</text>
+      <text x="905" y="98"  class="svg-t-lbl" text-anchor="middle">result</text>
+
+      <!-- sync-metadata -->
+      <rect x="490" y="200" width="300" height="44" rx="6" class="svg-box-p"/>
+      <text x="640" y="220" class="svg-t-b" text-anchor="middle">sync-metadata</text>
+      <text x="640" y="236" class="svg-t-s" text-anchor="middle">SiteWise &#8594; valve metadata CSV</text>
+
+      <line x1="560" y1="200" x2="470" y2="168" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f1m)"/>
+      <line x1="720" y1="200" x2="805" y2="168" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f1m)"/>
+    </svg>
+    <figcaption>Fig 1 &mdash; Edge pipeline. Solid = event data flow. Dashed = valve configuration metadata.</figcaption>
+  </figure>
+
+  <h3>Part B — Cloud path (result ke baad)</h3>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1160 160" role="img" aria-label="Cloud path diagram">
+      <defs>
+        <marker id="f2a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-b"/>
+        </marker>
+      </defs>
+
+      <rect x="15" y="26" width="1130" height="112" rx="10" class="svg-zone"/>
+      <text x="30" y="46" class="svg-t-lbl">AWS &#183; wpl-wrk-windfall-prd &#183; ap-southeast-2</text>
+
+      <rect x="30"  y="62" width="150" height="54" rx="6" class="svg-box-g"/>
+      <text x="105" y="84"  class="svg-t-b" text-anchor="middle">SiteWise</text>
+      <text x="105" y="101" class="svg-t-s" text-anchor="middle">PLP_VSR_Model</text>
+
+      <rect x="215" y="62" width="150" height="54" rx="6" class="svg-box"/>
+      <text x="290" y="84"  class="svg-t-b" text-anchor="middle">IoT Rule</text>
+      <text x="290" y="101" class="svg-t-s" text-anchor="middle">&#8594; SQS</text>
+
+      <rect x="400" y="62" width="140" height="54" rx="6" class="svg-box"/>
+      <text x="470" y="84"  class="svg-t-b" text-anchor="middle">Lambda</text>
+      <text x="470" y="101" class="svg-t-s" text-anchor="middle">parse concat</text>
+
+      <rect x="575" y="62" width="160" height="54" rx="6" class="svg-box-b"/>
+      <text x="655" y="84"  class="svg-t-b" text-anchor="middle">Aurora</text>
+      <text x="655" y="101" class="svg-t-s" text-anchor="middle">PostgreSQL</text>
+
+      <rect x="770" y="62" width="150" height="54" rx="6" class="svg-box"/>
+      <text x="845" y="84"  class="svg-t-b" text-anchor="middle">windfall-api</text>
+      <text x="845" y="101" class="svg-t-s" text-anchor="middle">SAM</text>
+
+      <rect x="955" y="62" width="160" height="54" rx="6" class="svg-box-a"/>
+      <text x="1035" y="84"  class="svg-t-b" text-anchor="middle">Windfall Studio</text>
+      <text x="1035" y="101" class="svg-t-s" text-anchor="middle">/pluto-vsr</text>
+
+      <line x1="180" y1="89" x2="209" y2="89" class="svg-line-b" marker-end="url(#f2a)"/>
+      <line x1="365" y1="89" x2="394" y2="89" class="svg-line-b" marker-end="url(#f2a)"/>
+      <line x1="540" y1="89" x2="569" y2="89" class="svg-line-b" marker-end="url(#f2a)"/>
+      <line x1="735" y1="89" x2="764" y2="89" class="svg-line-b" marker-end="url(#f2a)"/>
+      <line x1="920" y1="89" x2="949" y2="89" class="svg-line-b" marker-end="url(#f2a)"/>
+    </svg>
+    <figcaption>Fig 2 &mdash; Cloud path. Ye repo ke bahar hai (windfall-platform-automation / windfall-api).</figcaption>
+  </figure>
+
+  <div class="note tip">
+    <div class="note-title">Kyun edge par?</div>
+    <ul class="body" style="margin-bottom:0">
+      <li><strong>Network:</strong> Plant ka link slow/intermittent hai. Har event cloud bhejna practical nahi.</li>
+      <li><strong>Reachability:</strong> PHD SQL Server plant ke andar hai, cloud se reach hi nahi hota.</li>
+      <li><strong>OT security:</strong> Plant ka raw data seedha internet par nahi ja sakta.</li>
+      <li><strong>Volume:</strong> Hazaaron raw events se sirf kuch results banate hain — filtering edge par sasti hai.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────── 03 GREENGRASS ── -->
+<section id="greengrass">
+  <h2><span class="num">03</span>Greengrass 101 — sirf utna jitna chahiye</h2>
+
+  <p>
+    AWS IoT Greengrass = <strong>edge runtime</strong>. Aap apna code device par chalate ho,
+    lekin <em>manage</em> cloud se karte ho — kaun sa component, kaun se version, kis device par.
+  </p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1000 330" role="img" aria-label="Greengrass cloud to edge">
+      <defs>
+        <marker id="f3a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+      </defs>
+
+      <rect x="20" y="26" width="360" height="278" rx="10" class="svg-zone"/>
+      <text x="36" y="46" class="svg-t-lbl">AWS CLOUD</text>
+
+      <rect x="45"  y="62"  width="150" height="50" rx="6" class="svg-box-b"/>
+      <text x="120" y="83"  class="svg-t-b" text-anchor="middle">IoT Core</text>
+      <text x="120" y="99"  class="svg-t-s" text-anchor="middle">deployments</text>
+
+      <rect x="215" y="62"  width="140" height="50" rx="6" class="svg-box-b"/>
+      <text x="285" y="83"  class="svg-t-b" text-anchor="middle">S3</text>
+      <text x="285" y="99"  class="svg-t-s" text-anchor="middle">artifacts .zip</text>
+
+      <rect x="45"  y="132" width="310" height="50" rx="6" class="svg-box"/>
+      <text x="200" y="153" class="svg-t-b" text-anchor="middle">SiteWise &#183; CloudWatch &#183; SecretsManager</text>
+      <text x="200" y="169" class="svg-t-s" text-anchor="middle">data, logs, metrics, credentials</text>
+
+      <rect x="45"  y="202" width="310" height="50" rx="6" class="svg-box-g"/>
+      <text x="200" y="223" class="svg-t-b" text-anchor="middle">GitHub Actions + GDK</text>
+      <text x="200" y="239" class="svg-t-s" text-anchor="middle">build once &#8594; promote Dev/QA/Prod</text>
+
+      <!-- edge -->
+      <rect x="440" y="26" width="540" height="278" rx="10" class="svg-zone"/>
+      <text x="456" y="46" class="svg-t-lbl">EDGE DEVICE &#183; /greengrass/v2</text>
+
+      <rect x="465" y="62" width="490" height="46" rx="6" class="svg-box-a"/>
+      <text x="710" y="82"  class="svg-t-b" text-anchor="middle">Greengrass Nucleus</text>
+      <text x="710" y="98"  class="svg-t-s" text-anchor="middle">component lifecycle, deployments, logs</text>
+
+      <text x="465" y="130" class="svg-t-lbl">OUR CUSTOM COMPONENTS</text>
+      <rect x="465" y="140" width="238" height="34" rx="5" class="svg-box-a"/>
+      <text x="584" y="162" class="svg-t-s" text-anchor="middle" style="font-size:10.5px">windfall-cej-event-collector</text>
+      <rect x="717" y="140" width="238" height="34" rx="5" class="svg-box-a"/>
+      <text x="836" y="162" class="svg-t-s" text-anchor="middle" style="font-size:10.5px">windfall-cej-event-data-filter</text>
+      <rect x="465" y="182" width="238" height="34" rx="5" class="svg-box-a"/>
+      <text x="584" y="204" class="svg-t-s" text-anchor="middle" style="font-size:10.5px">windfall-cej-event-vsr-calculator</text>
+      <rect x="717" y="182" width="238" height="34" rx="5" class="svg-box-a"/>
+      <text x="836" y="204" class="svg-t-s" text-anchor="middle" style="font-size:10.5px">windfall-cej-sync-metadata</text>
+
+      <text x="465" y="242" class="svg-t-lbl">AWS-PROVIDED COMPONENTS (we depend on)</text>
+      <rect x="465" y="252" width="155" height="34" rx="5" class="svg-box-p"/>
+      <text x="542" y="274" class="svg-t-s" text-anchor="middle" style="font-size:10px">StreamManager</text>
+      <rect x="632" y="252" width="155" height="34" rx="5" class="svg-box-p"/>
+      <text x="710" y="274" class="svg-t-s" text-anchor="middle" style="font-size:10px">SecretManager</text>
+      <rect x="799" y="252" width="156" height="34" rx="5" class="svg-box-p"/>
+      <text x="877" y="274" class="svg-t-s" text-anchor="middle" style="font-size:10px">TokenExchange</text>
+
+      <line x1="380" y1="90" x2="459" y2="90" class="svg-line-a" marker-end="url(#f3a)"/>
+      <text x="420" y="80" class="svg-t-lbl" text-anchor="middle">deploy</text>
+    </svg>
+    <figcaption>Fig 3 &mdash; Cloud manage karta hai, edge execute karta hai.</figcaption>
+  </figure>
+
+  <h3>Zaroori concepts</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:170px">Concept</th><th>Matlab</th><th style="width:290px">Repo mein kahan</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Core device</strong></td><td>Wo machine jispar Greengrass install hai.</td><td><code>vagrant/</code> &mdash; local test VM</td></tr>
+      <tr><td><strong>Component</strong></td><td>Ek deployable unit = code + recipe.</td><td>Har top-level folder</td></tr>
+      <tr><td><strong>Recipe</strong></td><td>YAML manifest — config, dependencies, Install/Run scripts.</td><td><code>recipe.yaml</code></td></tr>
+      <tr><td><strong>Artifact</strong></td><td>Packaged code (zip) jo S3 par rehta hai.</td><td><code>gdk-config.json</code> &#8594; bucket</td></tr>
+      <tr><td><strong>Deployment</strong></td><td>Cloud ka order: "in components ko in versions par chalao".</td><td><code>.github/workflows/deployment.yml</code></td></tr>
+      <tr><td><strong>Work directory</strong></td><td><code>/greengrass/v2/work/&lt;name&gt;/</code> — component ka scratch space.</td><td><strong>Yahin state files banti hain</strong></td></tr>
+      <tr><td><strong>IPC</strong></td><td>Components aapas mein baat karte hain local pub/sub se.</td><td><code>services/ipc.py</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Ticket ka connection</div>
+    <p style="margin:0">
+      Greengrass <strong>code redeploy kar deta hai</strong> (artifacts S3 par safe hain), lekin
+      <strong>work directory restore nahi karta</strong>. Device gaya = state gayi. Yahi gap hai.
+    </p>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────── 04 PHD ──── -->
+<section id="phd">
+  <h2><span class="num">04</span>PHD Buffer — data kahan se aata hai</h2>
+
+  <p>
+    <strong>PHD</strong> = Process History Database, Honeywell <em>Uniformance</em> ka product
+    (isliye columns par <code>UF_</code> prefix). Plant ka "black box recorder" — DCS par jo bhi hota
+    hai, timestamp ke saath record hota hai.
+  </p>
+
+  <p>
+    Hum seedha PHD ko query nahi karte. Ek <strong>SQL Server "Site Buffer"</strong> hota hai jo
+    PHD ka event data mirror karta hai, aur usi ko read-only padha jaata hai.
+  </p>
+
+  <div class="grid c2">
+    <div class="card">
+      <h3>Connection config</h3>
+      <pre><code><span class="c"># recipe.yaml</span>
+DB_DATABASE:   <span class="s">"PHDAPP"</span>
+DB_SCHEMA:     <span class="s">"dbo"</span>
+DB_TABLE_NAME: <span class="s">"VW_EVENT_DATA"</span>  <span class="c"># VW = View</span>
+DB_USER:       <span class="s">"dbreader"</span>      <span class="c"># read-only!</span>
+DB_PORT:       <span class="s">"1433"</span></code></pre>
+      <p style="margin:0"><code>dbreader</code> read-only hai — ye niche wale point 3 ki wajah hai.</p>
+    </div>
+    <div class="card">
+      <h3>Columns jo padhe jaate hain</h3>
+      <div class="table-wrap" style="margin:0">
+      <table>
+        <tbody>
+          <tr><td><code>UF_EVENT_DATA_ID</code></td><td>Unique ID — poore pipeline ka <strong>dedup key</strong></td></tr>
+          <tr><td><code>ACTUAL_TIME</code></td><td>Event plant mein kab hua</td></tr>
+          <tr><td><code>REC_UPD_DATE</code></td><td>Row DB mein kab likhi — <strong>cursor isi par</strong></td></tr>
+          <tr><td><code>EVENT_NAME</code></td><td>Kaun sa tag/valve</td></tr>
+          <tr><td><code>VALUE1</code></td><td>Value — TRIP/NORMAL, TRUE/FALSE</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <h3>Teen baatein jo ticket ke liye matter karti hain</h3>
+
+  <ol class="steps">
+    <li>
+      <strong>PHD hi asli durable source hai</strong>
+      <p>State file sirf ek <em>pointer</em> hai PHD ke andar. Cursor bach gaya to purana data dobara padha
+      ja sakta hai. Cursor gaya = data PHD mein hai par pata nahi kahan se padhna hai.</p>
+    </li>
+    <li>
+      <strong>PHD retention = hard limit</strong>
+      <p>Agar outage 3 din chala aur PHD sirf 2 din rakhta hai — backup hone ke baad bhi wo data
+      <strong>hamesha ke liye gaya</strong>. Ye DR doc ka <strong>R3</strong> hai. OT team se confirm karna hai.</p>
+    </li>
+    <li>
+      <strong>Read-only access ki wajah se <code>rec_upd_date</code> cursor</strong>
+      <p>Behtar option <code>change_tracking</code> hai (SQL Server built-in), par uske liye table par DDL
+      chahiye — PLP ka PHD OT ka owned hai, hamara nahi.</p>
+    </li>
+  </ol>
+
+  <h4>Cursor modes ka trade-off</h4>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:170px">Mode</th><th>Kaise page karta hai</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>rec_upd_date</code><br><span class="pill green">default</span></td>
+        <td><code>(REC_UPD_DATE, UF_EVENT_DATA_ID)</code> par keyset paging</td>
+        <td>Sirf read access chahiye. Lekin strictly forward chalta hai — agar koi row <em>late</em> commit
+        ho gayi (timestamp peeche), wo <strong>silently skip</strong> ho jayegi.</td>
+      </tr>
+      <tr>
+        <td><code>change_tracking</code></td>
+        <td>SQL Server <code>SYS_CHANGE_VERSION</code> par</td>
+        <td>Reordering se immune. Lekin table par Change Tracking enable karna padta hai = DDL ownership chahiye.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Doc mein missing</div>
+    <p style="margin:0">
+      Ye out-of-order skip ek <strong>known accepted risk</strong> hai (README mein likha hai), par
+      DR document mein iska zikr nahi hai. Review mein add karna chahiye.
+    </p>
+  </div>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-collector/README.md">collector/README.md</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-collector/services/db.py">services/db.py</a>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────── 05 COMPONENTS ── -->
+<section id="components">
+  <h2><span class="num">05</span>The 4 Components</h2>
+
+  <h3>Pehle ek confusion door — &ldquo;repo&rdquo; nahi, &ldquo;component&rdquo;</h3>
+  <p>
+    Poora edge pipeline <strong>ek hi repository</strong> mein hai —
+    <code>windfall-greengrass-components</code>. Uske andar chaar top-level folders hain, aur
+    <strong>har folder ek independently deployable Greengrass component</strong> hai:
+    apna version, apni deployment, apna lifecycle.
+  </p>
+  <p>Ek folder &ldquo;component&rdquo; tab banta hai jab uske paas ye do files hon:</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:210px">File</th><th>Kya define karti hai</th></tr></thead>
+    <tbody>
+      <tr><td><code>recipe.yaml</code></td><td>Component manifest — config defaults, dependencies, Install/Run lifecycle scripts</td></tr>
+      <tr><td><code>gdk-config.json</code></td><td>Build + publish config — S3 bucket, region, version bump policy (<code>NEXT_PATCH</code>)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <div class="note-title">Repo README verbatim</div>
+    <p style="margin:0">
+      <em>&ldquo;They should be independent of each other.&rdquo;</em> — matlab ek component ka code badalna
+      baaki teen ko redeploy karne par majboor nahi karta.
+      <a href="#cicd"><code>deployment.yml</code></a> sirf <strong>changed</strong> components hi build karta hai.
+    </p>
+  </div>
+
+  <h3>Chaaron ek nazar mein</h3>
+
+  <div class="grid c2">
+    <div class="card accent">
+      <h3>1 · windfall-cej-event-collector</h3>
+      <p><strong>Kaam:</strong> Har 60 second PHD Buffer ko poll karo, cursor se aage ke events lo,
+      MQTT topic <code>cej/event/data</code> par publish karo.</p>
+      <p><strong>State:</strong> <code>cej-event-collector_state.pkl</code> — cursor. <span class="pill red">CRITICAL</span></p>
+      <p><strong>Khaas baat:</strong> <em>Two-phase commit</em> — pehle publish, tabhi cursor aage badhta hai.
+      Publish fail = batch dobara padha jayega, skip nahi hoga.</p>
+    </div>
+
+    <div class="card">
+      <h3>2 · windfall-cej-event-data-filter</h3>
+      <p><strong>Kaam:</strong> MQTT se events subscribe karo, metadata CSV se match karo
+      (ye tag kisi VSR valve ka hai ya nahi), relevant events <code>VSR_STREAM</code> mein daalo.</p>
+      <p><strong>State:</strong> Sirf metadata path. Dedup <strong>in-memory</strong> hai — restart par gayab.
+      <span class="pill green">LOW</span></p>
+      <p><strong>Khaas baat:</strong> Iske paas <em>koi cursor nahi</em> hai. DR doc yahan galat kehta hai.</p>
+    </div>
+
+    <div class="card accent">
+      <h3>3 · windfall-cej-event-vsr-calculator</h3>
+      <p><strong>Kaam:</strong> Stream se padho, har valve ka state machine chalao, stroke complete hone par
+      time nikaalo, grade karo, SiteWise par publish karo.</p>
+      <p><strong>State:</strong> <strong>3 files</strong> — stream cursor, dedup+in-flight checkpoint, metadata.
+      <span class="pill red">CRITICAL</span></p>
+      <p><strong>Khaas baat:</strong> Adhoore strokes (in-flight) disk par save hote hain, taaki restart ke baad
+      complete ho sakein.</p>
+    </div>
+
+    <div class="card">
+      <h3>4 · windfall-cej-sync-metadata</h3>
+      <p><strong>Kaam:</strong> SiteWise se valve configuration (MART/MERT/MATT, tag names, valve type)
+      laao, CSV mein likho, baaki components ko IPC se batao.</p>
+      <p><strong>State:</strong> Metadata path. <span class="pill green">RE-DERIVABLE</span></p>
+      <p><strong>Khaas baat:</strong> Ekmatra component jo already <code>TokenExchangeService</code> use karta hai
+      — S3 backup ke liye <strong>yahi template hai</strong>.</p>
+    </div>
+  </div>
+
+  <h3>Flow ka har step kiska hai</h3>
+  <p>
+    <a href="#tldr">TL;DR</a> wali line —
+    <span class="mono-sm">PHD padho → filter karo → state machine → stroke time → grade → publish</span>
+    — ka har step kis component ke andar chalta hai:
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:60px">Step</th><th style="width:230px">Flow ka hissa</th>
+      <th style="width:190px">Owner component</th><th>Asli code</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>0</strong></td>
+        <td>Valve config laao (tags + thresholds)</td>
+        <td><code>sync-metadata</code></td>
+        <td><code>services/sitewise.py</code></td>
+      </tr>
+      <tr>
+        <td><strong>1</strong></td>
+        <td><strong>PHD se valve events padho</strong></td>
+        <td><code>event-collector</code></td>
+        <td><code>services/db.py</code> + <code>main.py :: mqtt_publisher()</code></td>
+      </tr>
+      <tr>
+        <td><strong>2</strong></td>
+        <td><strong>Filter karo</strong></td>
+        <td><code>event-data-filter</code></td>
+        <td><code>main.py :: filter_event()</code></td>
+      </tr>
+      <tr>
+        <td><strong>3</strong></td>
+        <td><strong>State machine chalao</strong></td>
+        <td><code>vsr-calculator</code></td>
+        <td><code>main.py :: process_valve_event()</code> + 4 CSV tables</td>
+      </tr>
+      <tr>
+        <td><strong>4</strong></td>
+        <td><strong>Stroke time nikaalo</strong></td>
+        <td><code>vsr-calculator</code></td>
+        <td><code>main.py :: process_trip_time_action()</code></td>
+      </tr>
+      <tr>
+        <td><strong>5</strong></td>
+        <td><strong>PASS/FAIL grade karo</strong></td>
+        <td><code>vsr-calculator</code></td>
+        <td><code>services/utils.py :: calculate_result()</code></td>
+      </tr>
+      <tr>
+        <td><strong>6</strong></td>
+        <td><strong>SiteWise par publish karo</strong></td>
+        <td><code>vsr-calculator</code></td>
+        <td><code>services/sitewise.py</code></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Dhyaan do — 4 steps, 1 component</div>
+    <p style="margin:0">
+      Steps <strong>3, 4, 5, 6 — chaaron ek hi component</strong> ke andar hain. Kyunki chaaron ek hi
+      in-memory <code>valves_data</code> DataFrame par kaam karte hain: har valve ka current state,
+      last timestamps, in-flight trip — sab wahin. Inhe alag karne ka matlab hota ki ye state
+      <em>har event par</em> network par bhejni padti. Isiliye <code>vsr-calculator</code> repo ka sabse
+      bhaari component hai — <strong>1135 lines</strong> sirf <code>main.py</code> mein.
+    </p>
+  </div>
+
+  <h3>Step-by-step — kaun, kahan, kaise</h3>
+
+  <!-- Badges must read 0..3 so they match the pipeline step names. -->
+  <ol class="steps" style="counter-reset:s -1">
+    <li>
+      <strong>Step 0 · sync-metadata — config laao</strong>
+      <p>
+        Pipeline mein technically hai hi nahi, lekin <strong>iske bina baaki teen bekaar hain</strong>.
+        SiteWise Cloud se boto3 + <code>TokenExchangeService</code> ke through har valve ki configuration
+        kheenchta hai.
+      </p>
+      <dl class="kv">
+        <dt>Kab chalta hai</dt>
+        <dd>Startup par turant &#8594; phir roz <code>10:30</code> par &#8594; aur IPC
+            <code>METADATA_UPDATE</code> aane par (debounced, taaki rapid requests coalesce ho jayein)</dd>
+        <dt>Output</dt>
+        <dd><code>valve_metadata.csv</code> — ASSET_NAME, VALVE_TYPE, MATT/MERT/MART,
+            aur SR/TRIGGER/LIFT tag names</dd>
+        <dt>Batata kaise hai</dt>
+        <dd>IPC par <code>METADATA_UPDATE_COMPLETE</code> — <strong>file path payload mein</strong></dd>
+      </dl>
+    </li>
+
+    <li>
+      <strong>Step 1 · collector — PHD se padho</strong>
+      <p>Do threads: <code>ipc_listener</code> (coordination) aur <code>mqtt_publisher</code> (asli kaam).
+      Publisher loop har <strong>60 second</strong> chalta hai:</p>
+      <pre style="margin:0 0 10px"><code>events = db.retrieve_events()      <span class="c"># cursor se aage, max 5000 rows</span>
+  <span class="k">for</span> event <span class="k">in</span> events:
+      mqtt.publish(<span class="s">"cej/event/data"</span>, event)
+  mqtt.publish(<span class="s">"cej/event/data"</span>, HEART_BEAT)   <span class="c"># batch ka end marker</span>
+
+  <span class="k">if</span> all_published: db.commit_cursor()          <span class="c"># tabhi cursor aage</span>
+  <span class="k">else</span>:            <span class="c"># cursor nahi hila — batch dobara padha jayega</span></code></pre>
+      <p style="margin-bottom:0">
+        Collector <strong>khud se shuru nahi hota</strong>. Jab tak filter IPC par <code>START</code>
+        na bheje, <code>start_process</code> flag clear rehta hai aur PHD poll hi nahi hota —
+        taaki koi event MQTT par publish ho ke gir na jaye.
+      </p>
+    </li>
+
+    <li>
+      <strong>Step 2 · data-filter — shor hatao</strong>
+      <p>Har MQTT message par <code>filter_event()</code> teen cheezein karta hai:</p>
+      <ul class="body">
+        <li><strong>Match:</strong> <code>exists_in_metadata()</code> — tag SR / TRIGGER / LIFT lists mein hai ya nahi</li>
+        <li><strong>Dedup:</strong> in-memory LRU, key <code>UF_EVENT_DATA_ID</code></li>
+        <li><strong>Append:</strong> <code>stream.append_message(VSR_STREAM, event)</code></li>
+      </ul>
+      <p style="margin-bottom:0">
+        Dedup <em>yahan</em> kyun? Code ka comment khud batata hai — calculator ek order-dependent
+        state machine hai, aur repeated <code>TRIGGER→TRIP</code> ek <strong>jhoota stroke time</strong>
+        bana dega. Aur agar append fail ho jaaye to id <strong>record nahi</strong> hoti, taaki
+        redelivery pass ho sake.
+      </p>
+    </li>
+
+    <li>
+      <strong>Steps 3&ndash;6 · vsr-calculator — poora dimaag</strong>
+      <p><code>stream_listener()</code> har <strong>30 second</strong> ek tick chalata hai. Ek tick ke andar:</p>
+      <pre style="margin:0 0 10px"><code>fetch_new_messages()            <span class="c"># sequence cursor se aage</span>
+  process_message()             <span class="c"># dedup backstop</span>
+    find_valve_metadata_by_tag() <span class="c"># tag → kaunsa valve</span>
+    get_normalized_value()       <span class="c"># TRIP/NORMAL, TRUE/FALSE</span>
+    <span class="f">CSV lookup</span>               <span class="c"># step 3 — state machine</span>
+      execute_action()
+        process_trip_time_action()  <span class="c"># step 4 — stroke time</span>
+          calculate_result()        <span class="c"># step 5 — grading</span>
+          sitewise.publish() x4     <span class="c"># step 6 — output</span>
+
+sweep_hand_switch_timeouts()    <span class="c"># stuck HS trips fail karo</span>
+checkpoint.flush()              <span class="c"># dedup + in-flight, atomically</span>
+sequence_tracker.commit()       <span class="c"># tabhi cursor aage</span></code></pre>
+      <ul class="body" style="margin-bottom:0">
+        <li><strong>Step 3</strong> — koi hardcoded <code>if/else</code> nahi. CSV se pandas DataFrame banti hai,
+            transition ek <em>row lookup</em> hai: <code>CURRENT_STATE</code> + <code>SOURCE_EVENT</code> +
+            <code>NEW_EVENT</code> match karo, <code>NEW_STATE</code> aur <code>ACTION</code> nikaalo.</li>
+        <li><strong>Step 4</strong> — <code>stroke_time_ms = stroke_end_ms &minus; TRIGGER_TIMESTAMP</code>;
+            3M valves ke liye <code>stroke_end_ms = max(SR, LIFT)</code>.</li>
+        <li><strong>Step 5</strong> — <code>calculate_result()</code> band decide karta hai,
+            <code>calculate_condition()</code> pichle stroke se trend.</li>
+        <li><strong>Step 6</strong> — MQTT par 4 aliases: <code>/RESULT</code>, <code>/STROKE_TIME</code>,
+            <code>/CONDITION</code>, <code>/RESULT_CONCAT</code>.</li>
+      </ul>
+    </li>
+  </ol>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-collector/main.py">collector/main.py</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-data-filter/main.py">data-filter/main.py</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/main.py">vsr-calculator/main.py</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-sync-metadata/main.py">sync-metadata/main.py</a>
+  </div>
+
+  <h3>Startup order — kaun kiska wait karta hai</h3>
+
+  <p>
+    Boot sequence deliberate hai. Filter beech mein baithta hai: pehle wo khud ready hota hai,
+    <em>phir</em> collector ko chaalu karne ki permission deta hai.
+  </p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1020 356" role="img" aria-label="Component startup handshake">
+      <defs>
+        <marker id="f0a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+        <marker id="f0g" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-g"/>
+        </marker>
+      </defs>
+
+      <text x="30" y="20" class="svg-t-lbl">STARTUP HANDSHAKE &#183; IPC TOPIC /cej/component/control</text>
+
+      <!-- lanes -->
+      <rect x="40"  y="32" width="240" height="46" rx="6" class="svg-box-p"/>
+      <text x="160" y="53" class="svg-t-b" text-anchor="middle">sync-metadata</text>
+      <text x="160" y="69" class="svg-t-s" text-anchor="middle">step 0</text>
+
+      <rect x="390" y="32" width="240" height="46" rx="6" class="svg-box-a"/>
+      <text x="510" y="53" class="svg-t-b" text-anchor="middle">data-filter</text>
+      <text x="510" y="69" class="svg-t-s" text-anchor="middle">step 2</text>
+
+      <rect x="740" y="32" width="240" height="46" rx="6" class="svg-box-a"/>
+      <text x="860" y="53" class="svg-t-b" text-anchor="middle">collector</text>
+      <text x="860" y="69" class="svg-t-s" text-anchor="middle">step 1</text>
+
+      <!-- lifelines -->
+      <line x1="160" y1="78" x2="160" y2="344" class="svg-line" stroke-dasharray="4 5"/>
+      <line x1="510" y1="78" x2="510" y2="344" class="svg-line" stroke-dasharray="4 5"/>
+      <line x1="860" y1="78" x2="860" y2="344" class="svg-line" stroke-dasharray="4 5"/>
+
+      <!-- filter blocked band -->
+      <rect x="503" y="90" width="14" height="162" rx="3" class="svg-box-m"/>
+      <text x="532" y="104" class="svg-t-lbl">filter</text>
+      <text x="532" y="120" class="svg-t-lbl">blocked</text>
+
+      <!-- 1 metadata -->
+      <line x1="160" y1="132" x2="497" y2="132" class="svg-line-a" marker-end="url(#f0a)"/>
+      <text x="330" y="122" class="svg-t-lbl" text-anchor="middle">1 &#183; METADATA_UPDATE_COMPLETE + csv path</text>
+
+      <!-- 2 ping -->
+      <line x1="523" y1="180" x2="854" y2="180" class="svg-line-a" marker-end="url(#f0a)"/>
+      <text x="690" y="170" class="svg-t-lbl" text-anchor="middle">2 &#183; PING &#8212; &ldquo;zinda ho?&rdquo;</text>
+
+      <!-- 3 pong -->
+      <line x1="860" y1="224" x2="523" y2="224" class="svg-line-a" marker-end="url(#f0a)"/>
+      <text x="690" y="214" class="svg-t-lbl" text-anchor="middle">3 &#183; PONG</text>
+
+      <!-- 4 start -->
+      <line x1="523" y1="272" x2="854" y2="272" class="svg-line-g" marker-end="url(#f0g)"/>
+      <text x="690" y="262" class="svg-t-lbl" text-anchor="middle">4 &#183; START &#8212; &ldquo;ab chalu karo&rdquo;</text>
+
+      <!-- 5 running -->
+      <rect x="700" y="296" width="300" height="44" rx="6" class="svg-box-g"/>
+      <text x="850" y="316" class="svg-t-b" text-anchor="middle">PHD polling shuru</text>
+      <text x="850" y="332" class="svg-t-s" text-anchor="middle">60 s loop</text>
+    </svg>
+    <figcaption>Fig 4 &mdash; Boot handshake. Filter pehle metadata ka wait karta hai, phir collector ko chaalu karta hai.</figcaption>
+  </figure>
+
+  <div class="note tip">
+    <div class="note-title">Kyun itna ceremony?</div>
+    <p style="margin:0">
+      Local MQTT ek <strong>fire-and-forget broker</strong> hai — koi persistent queue nahi. Agar collector
+      publish karna shuru kar de aur filter abhi subscribe hi na hua ho, wo events
+      <strong>hamesha ke liye gayab</strong>. Isliye handshake: filter pehle stream banata hai,
+      metadata load karta hai, subscribe karta hai — <em>tabhi</em> collector ko START bhejta hai.
+    </p>
+  </div>
+
+  <h3>Aapas mein kaise baat karte hain</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:230px">Channel</th><th style="width:200px">Kis se kis tak</th><th>Kya jaata hai</th></tr></thead>
+    <tbody>
+      <tr><td><code>cej/event/data</code> <span class="pill blue">MQTT</span></td><td>collector &#8594; filter</td><td>Raw PHD events</td></tr>
+      <tr><td><code>VSR_STREAM</code> <span class="pill purple">StreamManager</span></td><td>filter &#8594; calculator</td><td>Filtered valve events, disk-backed queue</td></tr>
+      <tr><td><code>/cej/component/control</code> <span class="pill grey">IPC</span></td><td>collector &#8596; filter</td><td>START / STOP coordination</td></tr>
+      <tr><td><code>cloudwatch/metric/put</code> <span class="pill grey">IPC</span></td><td>sab &#8594; cloud</td><td>Custom CloudWatch metrics</td></tr>
+      <tr><td>Metadata CSV file</td><td>sync-metadata &#8594; filter, calculator</td><td>Valve config; path IPC se batayi jaati hai</td></tr>
+      <tr><td><code>/&lt;valve&gt;/RESULT</code> etc <span class="pill blue">MQTT</span></td><td>calculator &#8594; SiteWise</td><td>Final results</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Beech ka transport — ye hamara code nahi hai</h3>
+  <p>
+    Components ke beech ka plumbing <strong>AWS-provided components</strong> hai. Hum sirf use karte hain,
+    maintain nahi:
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:280px">Kya</th><th style="width:250px">Kaun deta hai</th><th>Ticket ke liye matlab</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Local MQTT broker<br><code>cej/event/data</code></td>
+        <td>Greengrass Nucleus / Moquette</td>
+        <td>Koi persistence nahi — isiliye handshake zaroori hai</td>
+      </tr>
+      <tr>
+        <td><code>VSR_STREAM</code></td>
+        <td><code>aws.greengrass.StreamManager</code></td>
+        <td>Disk-backed queue, par settings <strong>SDK default</strong> par hain</td>
+      </tr>
+      <tr>
+        <td>IPC pub/sub<br><code>/cej/component/control</code></td>
+        <td>Greengrass Nucleus</td>
+        <td>Backup component isi par metrics/coordination kar sakta hai</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Backup design ke liye</div>
+    <p style="margin:0">
+      <code>VSR_STREAM</code> ka data <strong>hamara code manage nahi karta</strong> — StreamManager karta hai,
+      apni alag directory mein. Backup scope mein wo <em>nahi</em> hai; hum sirf apne components ki
+      state files backup kar rahe hain. Stream ka apna alag risk hai —
+      <a href="#failure">scenario E</a> dekho.
+    </p>
+  </div>
+
+  <h3>Repo boundary — ticket kahan cross karega</h3>
+  <p>Edge ke aage ka sab kuch <strong>doosre repos</strong> mein hai:</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:260px">Layer</th><th style="width:300px">Repository</th><th>Aapke ticket se relation</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Edge components (steps 0&ndash;6)</td>
+        <td><code>windfall-greengrass-components</code> <span class="pill green">yahi</span></td>
+        <td>Backup component <strong>yahan</strong> banega</td>
+      </tr>
+      <tr>
+        <td>S3, IAM, SiteWise model, IoT Rule, SQS, Lambda</td>
+        <td><code>windfall-platform-automation</code></td>
+        <td><strong>Bucket + role permission yahan</strong> — ye pehle chahiye</td>
+      </tr>
+      <tr>
+        <td>REST API</td>
+        <td><code>windfall-platform-integration/windfall-api</code></td>
+        <td>Aurora upsert wala sawaal (<a href="#drgap">gap #5</a>) yahan/Lambda mein</td>
+      </tr>
+      <tr>
+        <td>Frontend <code>/pluto-vsr</code></td>
+        <td><code>windfall-doco/apps/windfall-studio</code></td>
+        <td>Involved nahi</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note danger">
+    <div class="note-title">Sequencing — jaldi flag karo</div>
+    <p style="margin:0">
+      S3 bucket aur token-exchange role ki permission <strong>pehle</strong> chahiye, tabhi edge component
+      usme likh payega. Ye <strong>do alag repos, do alag PRs</strong> hain — aur
+      <code>windfall-platform-automation</code> aapka repo nahi hai. Ticket estimate karte waqt
+      is dependency ko upfront rakho.
+    </p>
+  </div>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/docs/VSR_EDGE_TO_RDS_ARCHITECTURE.md">docs/VSR_EDGE_TO_RDS_ARCHITECTURE.md</a>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────── 06 DOMAIN ── -->
+<section id="domain">
+  <h2><span class="num">06</span>Valve Domain Logic</h2>
+
+  <h3>Stroke kya hai?</h3>
+  <p>
+    Ek <strong>stroke</strong> = valve ka poora movement, trip command se lekar physical confirmation tak.
+    Safety valve ko emergency mein apni <em>safe position</em> par pahunchna hota hai —
+    kitna time laga, wahi measure karte hain.
+  </p>
+
+  <h3>Chaar valve types</h3>
+  <p>
+    Naam do cheezein batata hai: <strong>safe direction</strong> (OPEN/CLOSE) aur
+    <strong>kitne signals</strong> monitor hote hain (2M/3M).
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:130px">Type</th><th style="width:180px">Safe position</th><th style="width:230px">Monitored signals</th><th>Stroke kab complete</th></tr></thead>
+    <tbody>
+      <tr><td><code>OPEN_2M</code></td><td>Open (depressurize)</td><td>TRIGGER + SR</td><td>SR aate hi</td></tr>
+      <tr><td><code>OPEN_3M</code></td><td>Open (depressurize)</td><td>TRIGGER + SR + LIFT</td><td>SR <em>aur</em> LIFT dono — jo baad mein aaye</td></tr>
+      <tr><td><code>CLOSE_2M</code></td><td>Close (isolate)</td><td>TRIGGER + SR</td><td>SR aate hi</td></tr>
+      <tr><td><code>CLOSE_3M</code></td><td>Close (isolate)</td><td>TRIGGER + SR + LIFT</td><td>SR <em>aur</em> LIFT dono</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <div class="note-title">"M" ka matlab</div>
+    <p style="margin:0">
+      Repo mein spell out nahi hai, lekin code se saaf hai: <strong>M = monitored signal count</strong>.
+      3M valves mein ek extra limit switch (LIFT) hai, isliye unka stroke end
+      <code>max(SR_timestamp, LIFT_timestamp)</code> hota hai — kyunki dono kisi bhi order mein aa sakte hain.
+    </p>
+  </div>
+
+  <h3>Teen signals</h3>
+  <div class="grid c3">
+    <div class="card">
+      <h3 style="color:var(--accent)">TRIGGER</h3>
+      <p>Operator/DCS ka command. Values normalize hote hain <code>TRIP</code> ya <code>NORMAL</code> mein.</p>
+      <p style="margin:0"><span class="pill amber">stroke START</span></p>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--blue)">SR</h3>
+      <p>Close-side limit switch. <code>TRUE</code>/<code>FALSE</code>. CSV warnings isse
+      <em>"close switch"</em> kehti hain.</p>
+      <p style="margin:0"><span class="pill blue">confirmation</span></p>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--green)">LIFT</h3>
+      <p>Open-side limit switch. Sirf 3M valves mein. CSV warnings isse
+      <em>"open switch"</em> kehti hain.</p>
+      <p style="margin:0"><span class="pill green">3M only</span></p>
+    </div>
+  </div>
+
+  <h3>Hand Switch (HS) ka special case</h3>
+  <p>
+    Kuch valves operator ke physical hand switch se trip hote hain. Problem: HS ek
+    <strong>momentary pulse</strong> hai — 2&ndash;3 second baad TRIGGER wapas <code>NORMAL</code> ho
+    jaata hai, jabki SR/LIFT abhi aaye hi nahi.
+  </p>
+  <p>
+    Naive state machine isse "operator ne cancel kar diya" samajh kar stroke fail kar deta.
+    Isliye <code>hs_lifecycle.py</code> alag rules lagata hai:
+  </p>
+  <ul class="body">
+    <li><strong>Suppression</strong> — mid-stroke NORMAL ko ignore karo, DCS ne trip latch kar rakha hai.</li>
+    <li><strong>Coalescing</strong> — trip already latched ho to doosra TRIP same stroke maano.</li>
+    <li><strong>Rearm</strong> — complete hone ke baad valve ko wapas armed state par le jao, taaki
+        physical reopen "rebound" na samjha jaye.</li>
+    <li><strong>Expiry</strong> — 5 minute tak SR/LIFT na aaye to trip fail kar do.</li>
+  </ul>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/hs_lifecycle.py">hs_lifecycle.py</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/tests/test_hand_switch.py">tests/test_hand_switch.py</a>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── 07 STATE MACHINE ── -->
+<section id="statemachine">
+  <h2><span class="num">07</span>State Machine — CSV se chalti hai</h2>
+
+  <p>
+    Har valve type ki apni <strong>transition table</strong> ek CSV file mein hai. Code hardcoded
+    <code>if/else</code> nahi hai — CSV lookup hai. Matlab behaviour badalna ho to CSV badlo.
+  </p>
+
+  <h4>CSV ka format</h4>
+  <pre><code>CURRENT_STATE,SOURCE_EVENT,NEW_EVENT,NEW_STATE,ACTION
+
+OPEN,TRIGGER,TRIP,TO_CLOSE,NO_ACTION
+TO_CLOSE,SR,TRUE,TO_CLOSE_SR_PENDING,NO_ACTION
+TO_CLOSE_SR_PENDING,LIFT,FALSE,CLOSE,<span class="n">TRIP_TIME</span>
+CLOSE,TRIGGER,TRIP,CLOSE,<span class="n">ALREADY_SAFE</span></code></pre>
+
+  <p>Padhne ka tareeka: <em>"agar abhi <code>CURRENT_STATE</code> mein hoon aur
+  <code>SOURCE_EVENT</code> ki value <code>NEW_EVENT</code> aayi, to <code>NEW_STATE</code> mein jao
+  aur <code>ACTION</code> karo."</em></p>
+
+  <h3>OPEN_3M valve ka trip path</h3>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1100 400" role="img" aria-label="OPEN_3M state machine">
+      <defs>
+        <marker id="f4a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+        <marker id="f4g" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-g"/>
+        </marker>
+        <marker id="f4r" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-r"/>
+        </marker>
+      </defs>
+
+      <!-- OPEN -->
+      <rect x="30" y="170" width="130" height="56" rx="28" class="svg-box-g"/>
+      <text x="95" y="196" class="svg-t-b" text-anchor="middle">OPEN</text>
+      <text x="95" y="212" class="svg-t-s" text-anchor="middle">safe</text>
+
+      <!-- TO_CLOSE -->
+      <rect x="250" y="170" width="150" height="56" rx="8" class="svg-box-a"/>
+      <text x="325" y="196" class="svg-t-b" text-anchor="middle">TO_CLOSE</text>
+      <text x="325" y="212" class="svg-t-s" text-anchor="middle">stroke chalu</text>
+
+      <!-- upper branch -->
+      <rect x="500" y="60" width="240" height="56" rx="8" class="svg-box-b"/>
+      <text x="620" y="84"  class="svg-t-b" text-anchor="middle">TO_CLOSE_SR_PENDING</text>
+      <text x="620" y="101" class="svg-t-s" text-anchor="middle">SR pehle aaya</text>
+
+      <!-- lower branch -->
+      <rect x="500" y="280" width="240" height="56" rx="8" class="svg-box-b"/>
+      <text x="620" y="304" class="svg-t-b" text-anchor="middle">MOVING_TO_CLOSE</text>
+      <text x="620" y="321" class="svg-t-s" text-anchor="middle">LIFT pehle aaya</text>
+
+      <!-- CLOSE -->
+      <rect x="850" y="170" width="130" height="56" rx="28" class="svg-box-g"/>
+      <text x="915" y="196" class="svg-t-b" text-anchor="middle">CLOSE</text>
+      <text x="915" y="212" class="svg-t-s" text-anchor="middle">terminal</text>
+
+      <!-- arrows -->
+      <line x1="160" y1="198" x2="244" y2="198" class="svg-line-a" marker-end="url(#f4a)"/>
+      <text x="202" y="186" class="svg-t-lbl" text-anchor="middle">TRIGGER:TRIP</text>
+
+      <path d="M400,182 C450,182 460,110 494,94" class="svg-line-a" marker-end="url(#f4a)"/>
+      <text x="452" y="132" class="svg-t-lbl" text-anchor="middle">SR:TRUE</text>
+
+      <path d="M400,214 C450,214 460,290 494,302" class="svg-line-a" marker-end="url(#f4a)"/>
+      <text x="452" y="272" class="svg-t-lbl" text-anchor="middle">LIFT:FALSE</text>
+
+      <path d="M740,94 C800,94 810,166 844,182" class="svg-line-g" marker-end="url(#f4g)"/>
+      <text x="812" y="122" class="svg-t-lbl" text-anchor="middle">LIFT:FALSE</text>
+
+      <path d="M740,302 C800,302 810,230 844,214" class="svg-line-g" marker-end="url(#f4g)"/>
+      <text x="812" y="288" class="svg-t-lbl" text-anchor="middle">SR:TRUE</text>
+
+      <!-- action badge -->
+      <rect x="836" y="118" width="158" height="30" rx="15" class="svg-box-g"/>
+      <text x="915" y="138" class="svg-t-s" text-anchor="middle" style="font-size:11px;font-weight:700">&#9889; TRIP_TIME</text>
+      <line x1="915" y1="148" x2="915" y2="164" class="svg-line-g" marker-end="url(#f4g)"/>
+
+      <!-- fail path -->
+      <path d="M325,226 C325,300 200,320 160,226" class="svg-line-r" marker-end="url(#f4r)"/>
+      <text x="228" y="316" class="svg-t-lbl" text-anchor="middle">TRIGGER:NORMAL &#8594; FAIL_TYPE3</text>
+
+      <!-- already safe self-loop -->
+      <path d="M880,226 C866,292 964,292 950,230" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f4a)"/>
+      <text x="915" y="316" class="svg-t-lbl" text-anchor="middle">TRIGGER:TRIP &#8594; ALREADY_SAFE</text>
+    </svg>
+    <figcaption>Fig 5 &mdash; OPEN_3M valve, trip se close tak. Do raaste kyunki SR aur LIFT kisi bhi order mein aa sakte hain.</figcaption>
+  </figure>
+
+  <div class="note tip">
+    <div class="note-title">Do branches kyun?</div>
+    <p style="margin:0">
+      3M valve mein SR aur LIFT independent switches hain — network/scan delay ki wajah se koi bhi pehle
+      aa sakta hai. Isliye <em>dono</em> raaste table mein hain, aur stroke end
+      <strong>jo baad mein aaya</strong> uska timestamp hota hai.
+    </p>
+  </div>
+
+  <h4>2M vs 3M — table ka farq</h4>
+  <div class="grid c2">
+    <div class="card">
+      <h3>OPEN_2M</h3>
+      <pre style="margin:0"><code>TO_CLOSE,SR,TRUE,CLOSE,<span class="n">TRIP_TIME</span></code></pre>
+      <p style="margin-top:10px;margin-bottom:0">SR aate hi seedha complete. Koi LIFT nahi.</p>
+    </div>
+    <div class="card">
+      <h3>OPEN_3M</h3>
+      <pre style="margin:0"><code>TO_CLOSE,SR,TRUE,TO_CLOSE_SR_PENDING,NO_ACTION
+TO_CLOSE_SR_PENDING,LIFT,FALSE,CLOSE,<span class="n">TRIP_TIME</span></code></pre>
+      <p style="margin-top:10px;margin-bottom:0">SR ke baad ruko, LIFT ka wait karo.</p>
+    </div>
+  </div>
+
+  <h4>ACTION column ke values</h4>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:170px">Action</th><th>Kya hota hai</th></tr></thead>
+    <tbody>
+      <tr><td><code>NO_ACTION</code></td><td>Sirf state change. Kuch publish nahi.</td></tr>
+      <tr><td><code>TRIP_TIME</code> <span class="pill green">main</span></td><td>Stroke complete. Time calculate karo, grade karo, SiteWise par 4 properties publish karo.</td></tr>
+      <tr><td><code>ALREADY_SAFE</code></td><td>Valve pehle se safe position par tha. Result "ALREADY_SAFE" publish.</td></tr>
+      <tr><td><code>FAIL_TYPE3</code></td><td>Mid-stroke NORMAL aa gaya = stroke abort. (HS valves ke liye suppress hota hai.)</td></tr>
+      <tr><td><code>W5</code>, <code>W16</code>, <code>W22</code>…</td><td>Sirf warning log — anomalous transition (rebound, reverse movement).</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/OPEN_3M.csv">OPEN_3M.csv</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/OPEN_2M.csv">OPEN_2M.csv</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/CLOSE_3M.csv">CLOSE_3M.csv</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/CLOSE_2M.csv">CLOSE_2M.csv</a>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────── 08 GRADING ── -->
+<section id="grading">
+  <h2><span class="num">08</span>Grading &amp; Outputs</h2>
+
+  <p>
+    Stroke complete hone par time nikalta hai, phir usko valve ke apne thresholds
+    (<code>MATT</code>, <code>MERT</code>, <code>MART</code>) se compare karke grade diya jaata hai.
+  </p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1100 330" role="img" aria-label="Stroke timeline and grading bands">
+      <defs>
+        <marker id="f5a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+      </defs>
+
+      <text x="30" y="28" class="svg-t-lbl">STROKE TIMELINE (3M VALVE)</text>
+
+      <!-- timeline axis -->
+      <line x1="60" y1="100" x2="1050" y2="100" class="svg-line"/>
+
+      <!-- TRIGGER -->
+      <line x1="150" y1="66" x2="150" y2="134" class="svg-line-a"/>
+      <circle cx="150" cy="100" r="6" class="svg-fill-a"/>
+      <text x="150" y="58" class="svg-t-b" text-anchor="middle">TRIGGER : TRIP</text>
+      <text x="150" y="152" class="svg-t-s" text-anchor="middle">t0</text>
+
+      <!-- SR -->
+      <line x1="560" y1="76" x2="560" y2="124" class="svg-line-b"/>
+      <circle cx="560" cy="100" r="5" class="svg-fill-b"/>
+      <text x="560" y="68" class="svg-t-s" text-anchor="middle">SR : TRUE</text>
+
+      <!-- LIFT -->
+      <line x1="760" y1="76" x2="760" y2="124" class="svg-line-g"/>
+      <circle cx="760" cy="100" r="6" class="svg-fill-g"/>
+      <text x="760" y="68" class="svg-t-b" text-anchor="middle">LIFT : FALSE</text>
+      <text x="760" y="152" class="svg-t-s" text-anchor="middle">t_end = max(SR, LIFT)</text>
+
+      <!-- span -->
+      <line x1="150" y1="178" x2="760" y2="178" class="svg-line-a" marker-end="url(#f5a)"/>
+      <line x1="150" y1="172" x2="150" y2="184" class="svg-line-a"/>
+      <rect x="380" y="164" width="160" height="28" rx="6" class="svg-box-a"/>
+      <text x="460" y="183" class="svg-t-b" text-anchor="middle">STROKE_TIME</text>
+
+      <!-- grading bar -->
+      <text x="30" y="232" class="svg-t-lbl">GRADING BANDS (example: MATT 10s &#183; MERT 16s &#183; MART 18s)</text>
+
+      <rect x="60"  y="248" width="230" height="40" rx="4" class="svg-box-r"/>
+      <text x="175" y="273" class="svg-t-b" text-anchor="middle">FAIL FAST</text>
+
+      <rect x="292" y="248" width="380" height="40" rx="4" class="svg-box-g"/>
+      <text x="482" y="273" class="svg-t-b" text-anchor="middle">PASS</text>
+
+      <rect x="674" y="248" width="200" height="40" rx="4" class="svg-box-m"/>
+      <text x="774" y="273" class="svg-t-b" text-anchor="middle">PASS SLOW</text>
+
+      <rect x="876" y="248" width="174" height="40" rx="4" class="svg-box-r"/>
+      <text x="963" y="273" class="svg-t-b" text-anchor="middle">FAIL</text>
+
+      <text x="292" y="308" class="svg-t-s" text-anchor="middle">MATT</text>
+      <text x="674" y="308" class="svg-t-s" text-anchor="middle">MERT</text>
+      <text x="876" y="308" class="svg-t-s" text-anchor="middle">MART</text>
+      <text x="60"  y="308" class="svg-t-s" text-anchor="start">0</text>
+    </svg>
+    <figcaption>Fig 6 &mdash; Upar: stroke ka start/end. Neeche: stroke time ko kaise grade kiya jaata hai.</figcaption>
+  </figure>
+
+  <h4>Grading logic (verbatim)</h4>
+  <pre><code><span class="k">def</span> <span class="f">calculate_result</span>(stroke_time, matt, mert, mart):
+    <span class="k">if</span>   stroke_time &lt;= <span class="n">0</span>                  : <span class="k">return</span> <span class="s">"INVALID"</span>
+    <span class="k">elif</span> stroke_time &lt; matt               : <span class="k">return</span> <span class="s">"FAIL FAST"</span>
+    <span class="k">elif</span> matt &lt;= stroke_time &lt;= mert     : <span class="k">return</span> <span class="s">"PASS"</span>
+    <span class="k">elif</span> mert &lt; stroke_time &lt;= mart      : <span class="k">return</span> <span class="s">"PASS SLOW"</span>
+    <span class="k">else</span>                                  : <span class="k">return</span> <span class="s">"FAIL"</span></code></pre>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/services/utils.py">services/utils.py</a>
+  </div>
+
+  <h3>SiteWise par kya publish hota hai</h3>
+  <p>Har complete stroke par <strong>4 properties</strong> jaati hain, alias
+  <code>/&lt;FULL_ASSET_NAME&gt;/&lt;PROPERTY&gt;</code> format mein:</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:180px">Property</th><th style="width:150px">Type</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>/RESULT</code></td><td>string</td><td><span class="pill green">PASS</span> <span class="pill amber">PASS SLOW</span> <span class="pill red">FAIL</span> <span class="pill red">FAIL FAST</span> <span class="pill grey">ALREADY_SAFE</span> <span class="pill grey">INVALID</span></td></tr>
+      <tr><td><code>/STROKE_TIME</code></td><td>number (ms)</td><td>e.g. <code>15234</code></td></tr>
+      <tr><td><code>/CONDITION</code></td><td>string</td><td>Pichle stroke se trend: <code>Steady</code>, <code>Slight Increase</code>, <code>Major Decrease</code>…</td></tr>
+      <tr><td><code>/RESULT_CONCAT</code></td><td>string</td><td>Sab kuch ek saath, <code>^</code> se separated — cloud Lambda isi ko parse karta hai</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>RESULT_CONCAT format</h4>
+  <pre><code>{result}^{trigger_ts_seconds}^{stroke_time_ms}^{condition}^{before}^{after}
+
+<span class="c">// example</span>
+PASS^1692374372^15234^Steady^N_CLOSED^CLOSED</code></pre>
+
+  <div class="note">
+    <div class="note-title">CONDITION = health trend</div>
+    <p style="margin:0">
+      <code>RESULT</code> batata hai "is baar theek tha ya nahi". <code>CONDITION</code> batata hai
+      "pichli baar se tez hua ya slow" — MERT ke &plusmn;10% / &plusmn;15% bands par.
+      Yahi predictive maintenance ka signal hai.
+    </p>
+  </div>
+
+  <h3>Valve identity — metadata CSV</h3>
+  <p>Har valve ki ek row hoti hai. Yahi batata hai ki kaun sa PHD tag kis valve ka kaunsa signal hai:</p>
+  <pre><code>ASSET_NAME, ASSET_ID, MODEL_EXTERNAL_ID, VALVE_TYPE,
+MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
+
+34UV202, a09e9fe4-…, PLP_VSR_Model, OPEN_3M,
+18000, 10000, 16000, SOE, U34GEC202, U34UZV202_SDR, U34GEO202</code></pre>
+  <p>
+    Jab event aata hai tag <code>U34UZV202_SDR</code> ke saath, calculator is table mein dhoondta hai —
+    "ye <code>34UV202</code> ka TRIGGER hai, type <code>OPEN_3M</code>, thresholds ye hain" — phir
+    us valve ka state machine chalata hai.
+  </p>
+</section>
+
+<!-- ───────────────────────────────────────────────────────── 09 STATE ──── -->
+<section id="state">
+  <h2><span class="num">09</span>State &amp; Durability — ticket ka dil</h2>
+
+  <p>
+    Ye section sabse important hai. Har component <strong>local disk</strong> par state likhta hai,
+    aur wahi disaster recovery ka asli artifact hai.
+  </p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1100 420" role="img" aria-label="State files and backup gap">
+      <defs>
+        <marker id="f6r" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-r"/>
+        </marker>
+        <marker id="f6g" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-g"/>
+        </marker>
+      </defs>
+
+      <rect x="20" y="30" width="640" height="360" rx="10" class="svg-zone"/>
+      <text x="36" y="50" class="svg-t-lbl">EDGE DISK &#183; /greengrass/v2/work/</text>
+
+      <!-- collector -->
+      <rect x="44" y="70" width="590" height="66" rx="6" class="svg-box-a"/>
+      <text x="60" y="94" class="svg-t-b">windfall_cej_event_collector/</text>
+      <text x="60" y="114" class="svg-t-s">cej-event-collector_state.pkl</text>
+      <text x="60" y="128" class="svg-t-s" style="fill:var(--text-dim)">cursor: query_start_time + tie_id  |  atomic write</text>
+      <rect x="520" y="86" width="98" height="22" rx="11" class="svg-box-r"/>
+      <text x="569" y="101" class="svg-t-s" text-anchor="middle" style="font-size:9.5px;font-weight:700">CRITICAL</text>
+
+      <!-- calculator -->
+      <rect x="44" y="148" width="590" height="98" rx="6" class="svg-box-a"/>
+      <text x="60" y="172" class="svg-t-b">windfall_cej_event_vsr_calculator/</text>
+      <text x="60" y="192" class="svg-t-s">latest_record_ingested.txt &#8212; stream cursor</text>
+      <text x="60" y="210" class="svg-t-s">processed_event_ids.json &#8212; dedup LRU + in-flight strokes</text>
+      <text x="60" y="228" class="svg-t-s">cej-event-vsr-calculator_state.pkl &#8212; metadata path</text>
+      <rect x="520" y="164" width="98" height="22" rx="11" class="svg-box-r"/>
+      <text x="569" y="179" class="svg-t-s" text-anchor="middle" style="font-size:9.5px;font-weight:700">CRITICAL</text>
+
+      <!-- filter -->
+      <rect x="44" y="258" width="590" height="52" rx="6" class="svg-box"/>
+      <text x="60" y="280" class="svg-t-b">windfall_cej_event_data_filter/</text>
+      <text x="60" y="299" class="svg-t-s">cej-event-data-filter_state.pkl &#8212; metadata path only (no cursor)</text>
+      <rect x="536" y="270" width="82" height="22" rx="11" class="svg-box-g"/>
+      <text x="577" y="285" class="svg-t-s" text-anchor="middle" style="font-size:9.5px;font-weight:700">LOW</text>
+
+      <!-- sync -->
+      <rect x="44" y="322" width="590" height="52" rx="6" class="svg-box"/>
+      <text x="60" y="344" class="svg-t-b">windfall_cej_sync_metadata/</text>
+      <text x="60" y="363" class="svg-t-s">cej-sync-metadata_state.pkl + metadata.csv &#8212; re-derivable</text>
+      <rect x="536" y="334" width="82" height="22" rx="11" class="svg-box-g"/>
+      <text x="577" y="349" class="svg-t-s" text-anchor="middle" style="font-size:9.5px;font-weight:700">LOW</text>
+
+      <!-- gap -->
+      <line x1="662" y1="200" x2="800" y2="200" class="svg-line-r" marker-end="url(#f6r)"/>
+      <text x="731" y="188" class="svg-t-lbl" text-anchor="middle" style="fill:var(--red)">NOTHING</text>
+
+      <rect x="812" y="120" width="264" height="80" rx="8" class="svg-box-r"/>
+      <text x="944" y="152" class="svg-t-b" text-anchor="middle" style="fill:var(--red)">&#9888; AAJ: KOI BACKUP NAHI</text>
+      <text x="944" y="172" class="svg-t-s" text-anchor="middle">disk gaya = cursor gaya</text>
+      <text x="944" y="188" class="svg-t-s" text-anchor="middle">= permanent data gap</text>
+
+      <line x1="662" y1="290" x2="800" y2="290" class="svg-line-g" stroke-dasharray="5 4" marker-end="url(#f6g)"/>
+      <text x="731" y="278" class="svg-t-lbl" text-anchor="middle" style="fill:var(--green)">5 MIN</text>
+
+      <rect x="812" y="252" width="264" height="80" rx="8" class="svg-box-g"/>
+      <text x="944" y="282" class="svg-t-b" text-anchor="middle" style="fill:var(--green)">PROPOSED: S3 BACKUP</text>
+      <text x="944" y="301" class="svg-t-s" text-anchor="middle">versioned + SSE-KMS bucket</text>
+      <text x="944" y="317" class="svg-t-s" text-anchor="middle">state.tar.gz + latest pointer</text>
+    </svg>
+    <figcaption>Fig 7 &mdash; State inventory aur wo gap jo ticket fix karega.</figcaption>
+  </figure>
+
+  <h3>Ground truth table</h3>
+  <p>Ye code se verify kiya hua hai — <strong>DR document ki table se kuch jagah alag hai</strong>
+  (<a href="#drgap">detail yahan</a>).</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:150px">Component</th><th style="width:260px">File</th>
+      <th style="width:110px">Atomic?</th><th style="width:110px">Impact</th><th>Missing hone par</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td>collector</td>
+        <td><code>cej-event-collector_state.pkl</code></td>
+        <td><span class="pill green">YES</span><br><span class="mono-sm">tmp+fsync+replace</span></td>
+        <td><span class="pill red">CRITICAL</span></td>
+        <td><strong>cursor = now &minus; 2 min</strong> &#8594; outage jitna data gap</td>
+      </tr>
+      <tr>
+        <td>calculator</td>
+        <td><code>latest_record_ingested.txt</code></td>
+        <td><span class="pill green">YES</span></td>
+        <td><span class="pill red">CRITICAL</span></td>
+        <td>&minus;1 &#8594; poora retained stream dobara padha jayega</td>
+      </tr>
+      <tr>
+        <td>calculator</td>
+        <td><code>processed_event_ids.json</code></td>
+        <td><span class="pill green">YES</span><br><span class="mono-sm">+ dir fsync</span></td>
+        <td><span class="pill red">CRITICAL</span></td>
+        <td>dedup + in-flight strokes gayab &#8594; adhoore strokes kabhi complete nahi honge</td>
+      </tr>
+      <tr>
+        <td>calculator</td>
+        <td><code>cej-event-vsr-calculator_state.pkl</code></td>
+        <td><span class="pill red">NO</span></td>
+        <td><span class="pill green">LOW</span></td>
+        <td>Metadata path — re-sync se wapas mil jaata hai</td>
+      </tr>
+      <tr>
+        <td>filter</td>
+        <td><code>cej-event-data-filter_state.pkl</code></td>
+        <td><span class="pill red">NO</span></td>
+        <td><span class="pill green">LOW</span></td>
+        <td>Graceful default. Koi cursor nahi hai.</td>
+      </tr>
+      <tr>
+        <td>sync-metadata</td>
+        <td><code>cej-sync-metadata_state.pkl</code></td>
+        <td><span class="pill red">NO</span></td>
+        <td><span class="pill green">LOW</span></td>
+        <td>Re-derivable</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Naming trap — backup script likhte waqt dhyan</div>
+    <p style="margin:0">
+      <strong>Directory</strong> mein underscore hai (<code>ComponentName</code>), <strong>filename</strong>
+      mein hyphen (<code>COMPONENT_ID</code>):<br>
+      <code style="white-space:normal">/greengrass/v2/work/windfall_cej_event_collector/cej-event-collector_state.pkl</code>
+    </p>
+  </div>
+
+  <div class="note danger">
+    <div class="note-title">Aur ek — path configurable hi nahi hai</div>
+    <p style="margin:0">
+      Code mein path <em>bare relative filename</em> hai: <code>f"{component_id}_state.pkl"</code>.
+      Ye process ke <strong>CWD</strong> par resolve hota hai. Greengrass ka CWD work dir hota hai —
+      lekin ye sirf <em>convention</em> hai, recipe mein kahin pin nahi kiya gaya. Device par verify karo.
+    </p>
+  </div>
+
+  <h3>Two-phase commit — kyun cursor safe hai</h3>
+  <p>Dono cursors (collector aur calculator) ek hi pattern follow karte hain:</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1000 210" role="img" aria-label="Two phase commit">
+      <defs>
+        <marker id="f7a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+        <marker id="f7r" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-r"/>
+        </marker>
+      </defs>
+
+      <rect x="30"  y="60" width="180" height="56" rx="6" class="svg-box"/>
+      <text x="120" y="84"  class="svg-t-b" text-anchor="middle">1 &#183; FETCH</text>
+      <text x="120" y="102" class="svg-t-s" text-anchor="middle">batch + pending cursor</text>
+
+      <rect x="270" y="60" width="180" height="56" rx="6" class="svg-box"/>
+      <text x="360" y="84"  class="svg-t-b" text-anchor="middle">2 &#183; PROCESS</text>
+      <text x="360" y="102" class="svg-t-s" text-anchor="middle">publish / calculate</text>
+
+      <rect x="510" y="60" width="180" height="56" rx="6" class="svg-box"/>
+      <text x="600" y="84"  class="svg-t-b" text-anchor="middle">3 &#183; FLUSH STATE</text>
+      <text x="600" y="102" class="svg-t-s" text-anchor="middle">dedup + in-flight</text>
+
+      <rect x="750" y="60" width="200" height="56" rx="6" class="svg-box-g"/>
+      <text x="850" y="84"  class="svg-t-b" text-anchor="middle">4 &#183; COMMIT CURSOR</text>
+      <text x="850" y="102" class="svg-t-s" text-anchor="middle">ab hi persist hota hai</text>
+
+      <line x1="210" y1="88" x2="264" y2="88" class="svg-line-a" marker-end="url(#f7a)"/>
+      <line x1="450" y1="88" x2="504" y2="88" class="svg-line-a" marker-end="url(#f7a)"/>
+      <line x1="690" y1="88" x2="744" y2="88" class="svg-line-a" marker-end="url(#f7a)"/>
+
+      <path d="M360,116 C360,170 200,170 120,124" class="svg-line-r" marker-end="url(#f7r)"/>
+      <text x="330" y="188" class="svg-t-lbl" text-anchor="middle" style="fill:var(--red)">crash / publish fail &#8594; batch dobara padho, cursor nahi hila</text>
+    </svg>
+    <figcaption>Fig 8 &mdash; Cursor tabhi aage badhta hai jab output confirm ho jaaye. At-least-once delivery.</figcaption>
+  </figure>
+
+  <div class="note ok">
+    <div class="note-title">Backup design ke liye critical rule</div>
+    <p style="margin:0">
+      Runtime order hai: <strong>checkpoint flush &#8594; phir cursor commit</strong>. Matlab checkpoint
+      hamesha cursor se aage ya barabar hota hai. Backup mein wahi invariant bachana hai, isliye
+      <strong>pehle <code>latest_record_ingested.txt</code> padho, phir
+      <code>processed_event_ids.json</code></strong>. Ulta karoge to restored cursor checkpoint se
+      aage nikal sakta hai — aur beech ke strokes chup-chaap gayab ho jayenge.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────── 10 FAILURE ─── -->
+<section id="failure">
+  <h2><span class="num">10</span>Failure Modes — kya kab hota hai</h2>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:60px">#</th><th style="width:210px">Scenario</th>
+      <th style="width:130px">Data loss?</th><th>Behaviour</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>A</strong></td>
+        <td>Host / disk gaya<br><span class="mono-sm">OT hardware loss</span></td>
+        <td><span class="pill red">HAAN</span></td>
+        <td><strong>Aaj:</strong> cursor gaya &#8594; <code>now &minus; 2 min</code> &#8594; outage jitna gap, permanent.<br>
+            <strong>Backup ke baad:</strong> &le;5 min ka reprocess, koi gap nahi.</td>
+      </tr>
+      <tr>
+        <td><strong>B</strong></td>
+        <td>Component crash / bad deploy</td>
+        <td><span class="pill green">NAHI</span></td>
+        <td>State intact. Restart par cursor se resume. Sirf throughput ruka.</td>
+      </tr>
+      <tr>
+        <td><strong>C</strong></td>
+        <td>State file corrupt (host theek)</td>
+        <td><span class="pill amber">DEPENDS</span></td>
+        <td><strong>Collector:</strong> <code>StateUnavailableError</code> raise karta hai — halt, silent default nahi. <span class="pill green">good</span><br>
+            <strong>Calculator:</strong> empty se continue karta hai + <code>CheckpointStateLost</code> metric.</td>
+      </tr>
+      <tr>
+        <td><strong>D</strong></td>
+        <td>PHD reachable nahi</td>
+        <td><span class="pill green">NAHI</span></td>
+        <td><strong>By design safe.</strong> Cursor hilta hi nahi. Retry/backoff. Reconnect par backlog drain.</td>
+      </tr>
+      <tr>
+        <td><strong>E</strong></td>
+        <td>Cloud impaired (SiteWise/IoT Core)</td>
+        <td><span class="pill amber">SHAYAD</span></td>
+        <td>StreamManager buffer karta hai. Lekin strategy <code>OverwriteOldestData</code> hai —
+            lamba outage = purana data <strong>evict</strong>.</td>
+      </tr>
+      <tr>
+        <td><strong>F</strong></td>
+        <td>Cert / DB secret expire</td>
+        <td><span class="pill green">NAHI</span></td>
+        <td>Cursor hold. Rotate karke redeploy, resume.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note danger">
+    <div class="note-title">Scenario A — asli impact</div>
+    <p>
+      DR doc kehta hai "gap <em>or</em> mass reprocessing". Code se clear hai: <strong>hamesha gap</strong>,
+      kabhi mass reprocess nahi. Aur ye sirf ek WARNING log chhodta hai —
+      koi metric nahi, koi alarm nahi. Detect karna mushkil hai.
+    </p>
+    <p style="margin:0">
+      Yahi ek line ticket ko justify karti hai. Isko DR doc mein loudly likhna chahiye.
+    </p>
+  </div>
+
+  <h3>StreamManager — unconfigured buffer</h3>
+  <p>Stream banate waqt sirf ek parameter set hota hai:</p>
+  <pre><code>MessageStreamDefinition(
+    name=stream_name,
+    strategy_on_full=StrategyOnFull.<span class="n">OverwriteOldestData</span>
+)
+<span class="c"># max_size, stream_segment_size, flush_on_write &#8212; sab SDK default</span></code></pre>
+  <p>
+    Matlab buffer ~256 MB default par hai, aur <code>flush_on_write=False</code> —
+    unclean power loss par recently appended stream data ja sakta hai.
+    DR doc ka <strong>R4</strong> risk isse zyada concrete hai jitna likha gaya hai.
+  </p>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-data-filter/services/stream.py">data-filter/services/stream.py</a>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────── 11 DR GAP ── -->
+<section id="drgap">
+  <h2><span class="num">11</span>DR Doc vs Code — kya theek karna hai</h2>
+
+  <p>
+    <code>VSR-Edge-Disaster-Recovery.md</code> ko code ke against verify kiya. Ye list review mein
+    le jaane layak hai.
+  </p>
+
+  <div class="note warn">
+    <div class="note-title">Sabse pehle</div>
+    <p style="margin:0">
+      Wo document abhi <strong>git mein untracked</strong> hai (<code>?? VSR-Edge-Disaster-Recovery.md</code>).
+      Ek <code>rm</code> door hai. Pehla kaam: version control ya Confluence mein daalo.
+    </p>
+  </div>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:60px">#</th><th style="width:210px">Doc kya kehta hai</th><th>Code kya kehta hai</th><th style="width:110px">Severity</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>filter ka state = <em>"Stream position / VSR_STREAM contents"</em>, impact <strong>High</strong></td>
+        <td><strong>Galat.</strong> Filter ke paas koi cursor nahi. Sirf metadata path. Stream cursor calculator ke paas hai. Impact <strong>Low</strong>.</td>
+        <td><span class="pill red">FIX</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>calculator ka state = 1 file</td>
+        <td><strong>3 files</strong> hain. Backup script galat file uthayegi.</td>
+        <td><span class="pill red">FIX</span></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>R6: <em>"cursor default unverified"</em></td>
+        <td><strong>Verified.</strong> <code>now &minus; 2 minutes</code>, always a gap. R6 close karo.</td>
+        <td><span class="pill amber">CLOSE</span></td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>&sect;1.3 RPO = <strong>15 min</strong></td>
+        <td>&sect;4.1 backup cadence = <strong>5 min</strong>. Aapas mein contradict karte hain.</td>
+        <td><span class="pill amber">FIX</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><em>"cloud dedup cache (DynamoDB + TTL) duplicates absorb karega"</em></td>
+        <td><strong>Is repo mein koi DynamoDB dedup nahi hai.</strong> SiteWise same-timestamp overwrite karta hai (safe), par Aurora Lambda upsert karta hai ya nahi — verify karo.</td>
+        <td><span class="pill red">VERIFY</span></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>&sect;2.2: loss = <em>"gap or mass reprocessing"</em></td>
+        <td>Collector ke liye <strong>hamesha gap</strong>. Ambiguity risk ko halka dikhati hai.</td>
+        <td><span class="pill amber">FIX</span></td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>R4: StreamManager overflow, <em>"size the buffer"</em></td>
+        <td>Buffer abhi <strong>bilkul configure hi nahi</strong> — sab SDK default. Aur <code>flush_on_write=False</code>.</td>
+        <td><span class="pill amber">EXPAND</span></td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>&mdash; (mention nahi)</td>
+        <td><code>rec_upd_date</code> mode late-committed rows ko <strong>silently skip</strong> karta hai. Known accepted risk, doc mein hona chahiye.</td>
+        <td><span class="pill amber">ADD</span></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>&sect;6.3: <em>"state directory paths confirm karo"</em></td>
+        <td>Paths <strong>configurable hi nahi</strong> — CWD par depend karte hain. Ye ek code fix hai, sirf documentation nahi.</td>
+        <td><span class="pill blue">NOTE</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Jo doc sahi kehta hai</h3>
+  <ul class="body">
+    <li><span class="pill green">✓</span> Collector state <strong>critical</strong> hai — bilkul sahi, aur under-stated bhi hai.</li>
+    <li><span class="pill green">✓</span> PHD unreachable = cursor hold, by-design safe — code exactly aisa hi karta hai.</li>
+    <li><span class="pill green">✓</span> sync-metadata re-derivable hai — sahi.</li>
+    <li><span class="pill green">✓</span> Build-once-promote CI model — sahi.</li>
+    <li><span class="pill green">✓</span> RPO ki soch (stale cursor = bounded reprocess, not loss) — direction sahi hai.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 12 PLAN ── -->
+<section id="plan">
+  <h2><span class="num">12</span>Action Plan — kaise aage badhna hai</h2>
+
+  <ol class="steps">
+    <li>
+      <strong>DR doc ko version control mein daalo</strong>
+      <p>Abhi untracked hai. Repo mein <code>docs/</code> ke andar commit karo ya Confluence par shift karo.
+      5 minute ka kaam, sabse zyada risk hataata hai.</p>
+    </li>
+    <li>
+      <strong>&sect;2.2 rewrite karo + R6 close karo</strong>
+      <p>Upar wali <a href="#state">ground truth table</a> paste karo. R6 ko
+      <code>now &minus; 2 minutes</code> finding ke saath close karo. Koi code change nahi,
+      par risk framing poori badal jaati hai.</p>
+    </li>
+    <li>
+      <strong>Teen external unknowns confirm karo</strong>
+      <p>Ye aapke control mein nahi, isliye jaldi puchho — inka jawab design ko affect karega:</p>
+      <ul class="body">
+        <li><strong>OT:</strong> PHD retention window kitna hai?</li>
+        <li><strong>OT:</strong> Host rebuild MTTR / SLA kya hai?</li>
+        <li><strong>Fuse (dusra repo):</strong> Aurora wala Lambda upsert karta hai ya plain insert?</li>
+      </ul>
+    </li>
+    <li>
+      <strong>S3 bucket + IAM (dusra repo)</strong>
+      <p><code>windfall-platform-automation</code> mein: versioned + SSE-KMS bucket, lifecycle policy,
+      aur token-exchange role par prefix-scoped least-privilege permission.
+      <strong>Ye ticket do repos mein failega</strong> — sequencing pehle hi flag kar do.</p>
+    </li>
+    <li>
+      <strong>Backup component banao</strong>
+      <p>Design notes neeche. <code>windfall-cej-sync-metadata</code> ko template ki tarah use karo —
+      wahi ekmatra component hai jo already <code>TokenExchangeService</code> declare karta hai.</p>
+    </li>
+    <li>
+      <strong>Restore runbook + drill</strong>
+      <p>&sect;4.2 likho aur <em>actually test karo</em> ek test core device par. Untested restore =
+      no restore.</p>
+    </li>
+  </ol>
+
+  <h3>Backup component — design notes</h3>
+
+  <div class="grid c2">
+    <div class="card">
+      <h3>Permissions</h3>
+      <p>Chaaron components default user par chalte hain (koi <code>RunWith</code> override nahi;
+      calculator recipe <code>chown ggc_user:ggc_group</code> karti hai). To ek sibling component
+      unki work dirs padh sakta hai.</p>
+      <p style="margin:0"><span class="pill amber">verify on device</span> Commit karne se pehle
+      confirm kar lena.</p>
+    </div>
+    <div class="card accent">
+      <h3>Snapshot order (critical)</h3>
+      <p>Calculator ke liye <strong>pehle cursor, phir checkpoint</strong> padho.</p>
+      <p style="margin:0">Ulta order restored cursor ko checkpoint se aage le ja sakta hai —
+      aur beech ke in-flight strokes chup-chaap gayab.</p>
+    </div>
+    <div class="card">
+      <h3>Cross-component consistency</h3>
+      <p>Zaroorat <strong>nahi</strong> hai. Har component ka apna write atomic hai aur replay
+      safe design hai.</p>
+      <p style="margin:0">Global quiesce mat banao — over-engineering hai.</p>
+    </div>
+    <div class="card">
+      <h3>Monitoring</h3>
+      <p>Existing pattern reuse karo: IPC &#8594; <code>cloudwatch/metric/put</code>
+      (dekho <code>services/metrics.py</code>).</p>
+      <p style="margin:0">Naya mechanism mat banao. Alarm: "2&times; cadence tak koi successful backup nahi".</p>
+    </div>
+  </div>
+
+  <h4>Sasta complementary fix</h4>
+  <p>
+    Har recipe mein ek <code>STATE_DIR</code> config add karo, taaki state path CWD par depend na kare.
+    Chhota, low-risk change — aur backup component ko path guess nahi karna padega.
+  </p>
+
+  <h4>Proposed S3 layout</h4>
+  <pre><code>s3://&lt;windfall-vsr-state-backup&gt;/
+  &lt;core-device-name&gt;/
+    2026-09-02T05-15-00Z/
+      state.tar.gz
+      state.tar.gz.sha256
+    latest/
+      state.tar.gz        <span class="c"># pointer to newest consistent snapshot</span></code></pre>
+
+  <div class="note tip">
+    <div class="note-title">Ek baat yaad rakhna</div>
+    <p style="margin:0">
+      Stale cursor restore karne se <strong>duplicates</strong> aayenge (5 min tak) — aur wo theek hai.
+      Missing cursor se <strong>gap</strong> aata hai — aur wo theek nahi hai.
+      Duplicates recoverable hain, gaps nahi. Design hamesha duplicates ki taraf jhukna chahiye.
+    </p>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────── 13 CICD ── -->
+<section id="cicd">
+  <h2><span class="num">13</span>Build &amp; Deploy</h2>
+
+  <p>Model hai <strong>build once, promote</strong> — same artifact Dev &#8594; QA &#8594; Prod jaata hai,
+  rebuild nahi hota.</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:230px">Workflow</th><th style="width:190px">Trigger</th><th>Kya karta hai</th></tr></thead>
+    <tbody>
+      <tr><td><code>build-component.yml</code></td><td>reusable</td><td>GDK install &#8594; <code>gdk component build</code> &#8594; OIDC se role assume &#8594; <code>gdk component publish --bucket …</code></td></tr>
+      <tr><td><code>deployment.yml</code></td><td><code>push</code> to main / manual</td><td>Changed components detect karta hai, Dev par build+publish, phir QA par auto-promote</td></tr>
+      <tr><td><code>promote-component.yml</code></td><td>reusable</td><td>Exact version ko agle environment par promote</td></tr>
+      <tr><td><code>promote-to-prod.yml</code></td><td>manual</td><td>Prod promotion — OT change-control window chahiye</td></tr>
+      <tr><td><code>test-components.yml</code></td><td>PR</td><td>pytest suites</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <dl class="kv">
+    <dt>Artifact bucket</dt><dd><code>cops-wpl-wrk-windfall-prd-artifacts-ap-southeast-2</code></dd>
+    <dt>Region</dt><dd><code>ap-southeast-2</code> (Sydney)</dd>
+    <dt>Account</dt><dd><code>wpl-wrk-windfall-prd</code> &middot; 909018902417</dd>
+    <dt>Versioning</dt><dd><code>NEXT_PATCH</code> &mdash; GDK auto-increment</dd>
+    <dt>Auth</dt><dd>GitHub OIDC &#8594; <code>DEPLOYMENT_ROLE</code></dd>
+  </dl>
+
+  <div class="note warn">
+    <div class="note-title">OT coordination</div>
+    <p style="margin:0">
+      Plant device ko touch karne wali koi bhi deployment ke liye <strong>change-control window</strong>
+      aur remote/physical access chahiye. Ye timeline ka bada factor hai — ticket estimate karte waqt
+      yaad rakhna.
+    </p>
+  </div>
+
+  <h4>Local development</h4>
+  <pre><code><span class="c"># root helper script</span>
+python gg.py build
+python gg.py deploy &lt;component&gt; &lt;version&gt;
+python gg.py list
+python gg.py restart &lt;component&gt;
+python gg.py get-password        <span class="c"># local debug console</span></code></pre>
+  <p><code>vagrant/</code> folder mein ek full local Greengrass core VM setup hai — testing ke liye.</p>
+</section>
+
+<!-- ─────────────────────────────────────────────────────── 14 REPO MAP ── -->
+<section id="repomap">
+  <h2><span class="num">14</span>Repo Map</h2>
+
+  <pre><code>windfall-greengrass-components/
+│
+├── <span class="k">gg.py</span>                          <span class="c"># local deploy helper CLI</span>
+├── VSR-Edge-Disaster-Recovery.md  <span class="c"># ⚠ UNTRACKED — your ticket</span>
+│
+├── docs/
+│   ├── SITEWISE_EDGE_VSR_MODEL_USAGE.md   <span class="c"># PLP_VSR_Model definition</span>
+│   └── VSR_EDGE_TO_RDS_ARCHITECTURE.md    <span class="c"># end-to-end flow</span>
+│
+├── vagrant/                       <span class="c"># local Greengrass core VM</span>
+│
+├── <span class="k">windfall-cej-event-collector/</span>
+│   ├── recipe.yaml                <span class="c"># config + lifecycle</span>
+│   ├── gdk-config.json            <span class="c"># bucket, region, version</span>
+│   ├── main.py
+│   └── services/
+│       ├── db.py                  <span class="c"># ★ PHD queries + cursor logic</span>
+│       ├── state.py               <span class="c"># ★ atomic state persistence</span>
+│       ├── mqtt.py  ipc.py  metrics.py  config.py  logger.py
+│
+├── <span class="k">windfall-cej-event-data-filter/</span>
+│   └── services/
+│       ├── stream.py              <span class="c"># ★ VSR_STREAM creation</span>
+│       ├── dedup.py               <span class="c"># in-memory LRU</span>
+│       └── data.py  state.py  …
+│
+├── <span class="k">windfall-cej-event-vsr-calculator/</span>
+│   ├── OPEN_2M.csv OPEN_3M.csv    <span class="c"># ★ state transition tables</span>
+│   ├── CLOSE_2M.csv CLOSE_3M.csv
+│   ├── hs_lifecycle.py            <span class="c"># ★ hand-switch rules</span>
+│   ├── main.py                    <span class="c"># ★ state machine driver</span>
+│   └── services/
+│       ├── sequence_number_tracker.py  <span class="c"># ★ stream cursor</span>
+│       ├── batch_checkpoint.py         <span class="c"># ★ dedup + in-flight</span>
+│       ├── inflight_state.py           <span class="c"># in-flight stroke slice</span>
+│       ├── utils.py                    <span class="c"># ★ grading logic</span>
+│       └── sitewise.py  dedup.py  stream.py  …
+│
+└── <span class="k">windfall-cej-sync-metadata/</span>
+    └── services/
+        └── sitewise.py            <span class="c"># ★ boto3 + TokenExchange — backup template</span></code></pre>
+
+  <p><span class="mono-sm">★</span> = ticket ke liye sabse relevant files.</p>
+</section>
+
+<!-- ──────────────────────────────────────────────────── 15 CHEAT SHEET ── -->
+<section id="cheatsheet">
+  <h2><span class="num">15</span>Cheat Sheet</h2>
+
+  <div class="grid c2">
+    <div class="card">
+      <h3>Device par debug</h3>
+      <pre style="margin:0"><code><span class="c"># component status</span>
+/greengrass/v2/bin/greengrass-cli component list
+
+<span class="c"># logs</span>
+tail -f /greengrass/v2/logs/&lt;component&gt;.log
+
+<span class="c"># state files</span>
+ls -la /greengrass/v2/work/&lt;ComponentName&gt;/
+
+<span class="c"># local debug console</span>
+greengrass-cli get-debug-password
+<span class="c"># then https://localhost:1441</span></code></pre>
+    </div>
+    <div class="card">
+      <h3>Repo par tests</h3>
+      <pre style="margin:0"><code>cd windfall-cej-event-vsr-calculator
+pytest -q
+
+<span class="c"># specific behaviour</span>
+pytest tests/test_hand_switch.py -v
+pytest tests/test_state_durability.py -v
+pytest tests/test_cursor_commit.py -v</code></pre>
+    </div>
+  </div>
+
+  <h3>Numbers yaad rakhne layak</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:280px">Cheez</th><th style="width:150px">Value</th><th>Kahan se</th></tr></thead>
+    <tbody>
+      <tr><td>Collector poll interval</td><td><code>60 s</code></td><td><code>POLL_INTERVAL_SECONDS</code></td></tr>
+      <tr><td>Cold-start cursor backfill</td><td><code>2 min</code></td><td><code>db.py</code> &mdash; <strong>the gap</strong></td></tr>
+      <tr><td>Dedup window (filter &amp; calculator)</td><td><code>20 000</code> ids</td><td><code>DEDUP_CAPACITY</code></td></tr>
+      <tr><td>Collector max batch</td><td><code>5 000</code> rows</td><td>must be &lt; dedup capacity</td></tr>
+      <tr><td>HS completion timeout</td><td><code>5 min</code></td><td><code>hs_lifecycle.py</code></td></tr>
+      <tr><td>StreamManager buffer</td><td><code>~256 MB</code></td><td>SDK default &mdash; <strong>unconfigured</strong></td></tr>
+      <tr><td>Proposed backup cadence</td><td><code>5 min</code></td><td>DR doc &sect;4.1</td></tr>
+      <tr><td>Platform RTO target</td><td><code>1 hr</code></td><td>DR doc &sect;1.3</td></tr>
+      <tr><td>End-to-end RTO target</td><td><code>4 hr</code></td><td>incl. OT hardware MTTR</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Ek line mein har component</h3>
+  <div class="table-wrap">
+  <table>
+    <tbody>
+      <tr><td style="width:250px"><code>collector</code></td><td>PHD se padho, cursor sambhalo, MQTT par bhejo</td></tr>
+      <tr><td><code>data-filter</code></td><td>VSR valves ke events chhaanto, stream mein daalo</td></tr>
+      <tr><td><code>vsr-calculator</code></td><td>State machine chalao, stroke time nikaalo, grade karo, publish karo</td></tr>
+      <tr><td><code>sync-metadata</code></td><td>SiteWise se valve config laao, CSV likho</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<div class="footer">
+  Generated for ticket prep &nbsp;·&nbsp; verified against <code>main</code> @ <code>610b2c3</code>
+  &nbsp;·&nbsp; source of truth is always the code, not this page.
+</div>
+
+</main>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
