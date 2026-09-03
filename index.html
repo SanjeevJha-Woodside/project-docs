@@ -28,30 +28,31 @@
       <li><a href="#glossary"><span class="n">01</span>Glossary</a></li>
       <li><a href="#bigpicture"><span class="n">02</span>Big Picture</a></li>
       <li><a href="#greengrass"><span class="n">03</span>Greengrass 101</a></li>
-      <li><a href="#phd"><span class="n">04</span>PHD Source</a></li>
+      <li><a href="#mqtt"><span class="n">04</span>MQTT Broker (EMQX)</a></li>
+      <li><a href="#phd"><span class="n">05</span>PHD Source</a></li>
     </ul>
 
     <div class="nav-group">Codebase</div>
     <ul>
-      <li><a href="#components"><span class="n">05</span>The 4 Components</a></li>
-      <li><a href="#domain"><span class="n">06</span>Valve Domain Logic</a></li>
-      <li><a href="#statemachine"><span class="n">07</span>State Machine</a></li>
-      <li><a href="#grading"><span class="n">08</span>Grading &amp; Outputs</a></li>
+      <li><a href="#components"><span class="n">06</span>The 4 Components</a></li>
+      <li><a href="#domain"><span class="n">07</span>Valve Domain Logic</a></li>
+      <li><a href="#statemachine"><span class="n">08</span>State Machine</a></li>
+      <li><a href="#grading"><span class="n">09</span>Grading &amp; Outputs</a></li>
     </ul>
 
     <div class="nav-group">Ticket</div>
     <ul>
-      <li><a href="#state"><span class="n">09</span>State &amp; Durability</a></li>
-      <li><a href="#failure"><span class="n">10</span>Failure Modes</a></li>
-      <li><a href="#drgap"><span class="n">11</span>DR Doc vs Code</a></li>
-      <li><a href="#plan"><span class="n">12</span>Action Plan</a></li>
+      <li><a href="#state"><span class="n">10</span>State &amp; Durability</a></li>
+      <li><a href="#failure"><span class="n">11</span>Failure Modes</a></li>
+      <li><a href="#drgap"><span class="n">12</span>DR Doc vs Code</a></li>
+      <li><a href="#plan"><span class="n">13</span>Action Plan</a></li>
     </ul>
 
     <div class="nav-group">Reference</div>
     <ul>
-      <li><a href="#cicd"><span class="n">13</span>Build &amp; Deploy</a></li>
-      <li><a href="#repomap"><span class="n">14</span>Repo Map</a></li>
-      <li><a href="#cheatsheet"><span class="n">15</span>Cheat Sheet</a></li>
+      <li><a href="#cicd"><span class="n">14</span>Build &amp; Deploy</a></li>
+      <li><a href="#repomap"><span class="n">15</span>Repo Map</a></li>
+      <li><a href="#cheatsheet"><span class="n">16</span>Cheat Sheet</a></li>
     </ul>
   </nav>
 </aside>
@@ -101,7 +102,7 @@
     </p>
     <p style="margin:10px 0 0">
       Is line ka <strong>har step kis component ke andar chalta hai</strong> —
-      <a href="#components">section 05</a> mein step-by-step breakdown hai.
+      <a href="#components">section 06</a> mein step-by-step breakdown hai.
     </p>
   </div>
 
@@ -136,6 +137,7 @@
       <tr><td><strong>VSR</strong></td><td>Valve Shutdown Reporting</td><td>Poore project ka naam. Shutdown valves ki performance report karna.</td></tr>
       <tr><td><strong>PHD</strong></td><td>Process History Database</td><td>Honeywell Uniformance ka plant historian. Plant mein jo hua sab record karta hai. Hamara data source.</td></tr>
       <tr><td><strong>Greengrass</strong></td><td>AWS IoT Greengrass V2</td><td>Edge runtime — cloud ka code plant ke device par chalata hai. <a href="#greengrass">Detail</a></td></tr>
+      <tr><td><strong>EMQX</strong></td><td>&mdash;</td><td>Device par chalne wala local MQTT broker. Components isi ke through baat karte hain. <a href="#mqtt">Detail</a></td></tr>
       <tr><td><strong>SiteWise</strong></td><td>AWS IoT SiteWise</td><td>Industrial time-series database. Yahan final results jaate hain.</td></tr>
       <tr><td><strong>Stroke</strong></td><td>&mdash;</td><td>Valve ka ek complete open/close movement. Command se lekar confirmation tak.</td></tr>
       <tr><td><strong>Stroke time</strong></td><td>&mdash;</td><td>Us movement mein laga time, <strong>milliseconds</strong> mein. Yahi main output hai.</td></tr>
@@ -278,10 +280,11 @@
         <td><span class="pill green">HAAN</span></td>
       </tr>
       <tr>
-        <td><strong>MQTT broker</strong><br><span class="mono-sm">127.0.0.1:1883</span></td>
+        <td><strong>MQTT broker</strong><br><span class="mono-sm">EMQX &#183; 127.0.0.1:1883</span></td>
         <td>AWS</td>
-        <td>SiteWise Edge gateway ke saath install hota hai. CloudFormation se provision hota hai —
-            <code>windfall-platform-automation</code> mein.</td>
+        <td>Managed component <code>aws.greengrass.clientdevices.mqtt.EMQX</code>, Docker container
+            mein. CloudFormation se provision hota hai &mdash;
+            <code>windfall-platform-automation</code> mein. <a href="#mqtt">Poora detail</a></td>
         <td><span class="pill red">NAHI</span></td>
       </tr>
       <tr>
@@ -439,6 +442,40 @@ VALUE1             <span class="c"># TRIP/NORMAL, TRUE/FALSE</span></code></pre>
     lekin <em>manage</em> cloud se karte ho — kaun sa component, kaun se version, kis device par.
   </p>
 
+  <h3>Sabse pehle — Greengrass koi device nahi hai</h3>
+
+  <p>
+    Ye sabse aam confusion hai. <strong>AWS koi hardware nahi bhejta.</strong> Greengrass sirf
+    <strong>software</strong> hai — ek Java program jo aap <em>apni</em> machine par install karte ho.
+    Console mein jo &ldquo;Core device&rdquo; dikhta hai wo sirf ek <em>registration entry</em> hai,
+    AWS ki machine nahi.
+  </p>
+
+  <p>
+    Sabse aasan mental model: socho jaise koi <strong>monitoring agent</strong> apne server par
+    install karte ho. Dashboard cloud mein hai, control cloud se hota hai — par server aapka hi hai.
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:300px">AWS ka kaam</th><th>Aapka (aur OT ka) kaam</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Device ki identity — IoT Thing, X.509 certificate, IoT policy, token-exchange IAM role</td>
+        <td><strong>Machine khud</strong> — hardware, rack space, power, network</td>
+      </tr>
+      <tr>
+        <td>Deployments bhejna — &ldquo;in components ko in versions par chalao&rdquo;</td>
+        <td>OS, Java 11, Python, ODBC driver, Docker install karna</td>
+      </tr>
+      <tr>
+        <td>Artifacts S3 par rakhna</td>
+        <td>Uptime, patching, monitoring, aur <strong>rebuild jab machine mar jaaye</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
   <figure class="fig">
     <svg viewBox="0 0 1000 330" role="img" aria-label="Greengrass cloud to edge">
       <defs>
@@ -468,7 +505,7 @@ VALUE1             <span class="c"># TRIP/NORMAL, TRUE/FALSE</span></code></pre>
 
       <!-- edge -->
       <rect x="440" y="26" width="540" height="278" rx="10" class="svg-zone"/>
-      <text x="456" y="46" class="svg-t-lbl">EDGE DEVICE &#183; /greengrass/v2</text>
+      <text x="456" y="46" class="svg-t-lbl">EDGE DEVICE &#183; WINDOWS SERVER &#183; C:\greengrass\v2</text>
 
       <rect x="465" y="62" width="490" height="46" rx="6" class="svg-box-a"/>
       <text x="710" y="82"  class="svg-t-b" text-anchor="middle">Greengrass Nucleus</text>
@@ -495,37 +532,809 @@ VALUE1             <span class="c"># TRIP/NORMAL, TRUE/FALSE</span></code></pre>
       <line x1="380" y1="90" x2="459" y2="90" class="svg-line-a" marker-end="url(#f3a)"/>
       <text x="420" y="80" class="svg-t-lbl" text-anchor="middle">deploy</text>
     </svg>
-    <figcaption>Fig 3 &mdash; Cloud manage karta hai, edge execute karta hai.</figcaption>
+    <figcaption>Fig 3 &mdash; Cloud manage karta hai, edge execute karta hai. Deploy arrow <strong>one-way</strong> hai:
+    cloud order bhejta hai, device state wapas nahi bhejta.</figcaption>
   </figure>
+
+  <h3>Core device — plant ki asli machine</h3>
+
+  <p>
+    &ldquo;Edge device&rdquo; koi abstract cheez nahi hai. Pluto ke liye wo <strong>ek specific
+    Windows Server machine</strong> hai jo OT DMZ mein baithi hai. Uski poori configuration
+    <code>windfall-platform-automation</code> repo mein version-controlled hai:
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:210px">Cheez</th><th>Production value</th></tr></thead>
+    <tbody>
+      <tr><td>Device name (IoT Thing)</td><td><code>wfp-prd-plp-shared-01-greengrass-device</code></td></tr>
+      <tr><td>Operating system</td><td><strong>Windows Server</strong> <span class="pill amber">Linux nahi</span></td></tr>
+      <tr><td>Install path</td><td><code>C:\greengrass\v2</code></td></tr>
+      <tr><td>Components kis user par chalte hain</td><td><code>ggc_user</code></td></tr>
+      <tr><td>Region</td><td><code>ap-southeast-2</code></td></tr>
+      <tr><td>Network zone</td><td><strong>OT DMZ</strong> &mdash; internet sirf
+          <code>proxy.sharedsvcs.prd.otdmz.woodside:8080</code> ke through</td></tr>
+      <tr><td>IoT endpoint</td><td><code>iot-data.windfall.prd.woodside</code> (private, public AWS endpoint nahi)</td></tr>
+      <tr><td>Device certificate</td><td>Secrets Manager: <code>/prod/wfp/plp-shared-01-iot-client-certificate</code></td></tr>
+      <tr><td>Install kaise hota hai</td><td><code>core-device-installer.ps1</code> &mdash; PowerShell,
+          <code>#Requires -RunAsAdministrator</code>, manually chalayi jaati hai</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>
+    Naam padhne ka tareeka: <code>wfp</code> = Windfall Platform, <code>prd</code> = production,
+    <code>plp</code> = <strong>Pluto LNG Plant</strong>, <code>shared-01</code> = shared device #1.
+  </p>
+
+  <div class="note danger">
+    <div class="note-title">⚠ Teen baatein jo backup component ka design badalti hain</div>
+    <ol class="body" style="margin:0;padding-left:20px">
+      <li><strong>Paths Windows ke hain.</strong> State file asli mein
+          <code style="white-space:normal">C:\greengrass\v2\work\windfall_cej_event_collector\…</code>
+          par hai. Backup script Linux paths maan kar mat likhna.</li>
+      <li><strong>Proxy mandatory hai.</strong> Device seedha internet par nahi ja sakta — S3 upload
+          bhi <em>usi proxy</em> se jaana padega. Installer README kehta hai:
+          <em>&ldquo;Proxy is required in OT (for now).&rdquo;</em>
+          Ye DR document mein <strong>kahin mention nahi hai</strong>.</li>
+      <li><strong><code>shared-01</code> = ek hi device.</strong> Koi redundancy nahi dikhti.
+          Wahi machine single point of failure hai — yahi poore ticket ki wajah hai. Aur rebuild ke
+          liye IoT certificate chahiye, isliye restore runbook mein wo step hona chahiye warna naya
+          device connect hi nahi hoga.</li>
+    </ol>
+  </div>
+  <div class="srcline">
+    <a class="src" href="../windfall-platform-automation/workstreams/windfall-platform/install_scripts/wfp-prd-plp-shared-01.json">automation/install_scripts/wfp-prd-plp-shared-01.json</a>
+    <a class="src" href="../windfall-platform-automation/workstreams/windfall-platform/install_scripts/core-device-installer.ps1">automation/install_scripts/core-device-installer.ps1</a>
+    <a class="src" href="../windfall-greengrass-components/vagrant/README.md">vagrant/README.md</a>
+  </div>
+
+  <div class="note tip">
+    <div class="note-title">Local dev par wahi cheez, choti si</div>
+    <p style="margin:0">
+      Aapke laptop par &ldquo;edge device&rdquo; ek <strong>VirtualBox VM</strong> hai —
+      <code>bento/ubuntu-22.04</code>, dekho <code>vagrant/Vagrantfile</code>. Wahi Nucleus,
+      wahi component structure, bas Linux par aur path <code>/greengrass/v2</code>.
+      Ye khud proof hai ki Greengrass sirf software hai.
+    </p>
+  </div>
+
+  <h3>Install kaise hota hai — manual staging</h3>
+
+  <p>
+    Plant ki machine par <strong>general internet nahi hai</strong>. Isliye Greengrass ka JAR
+    download nahi hota — koi insaan use pehle machine par <strong>rakh ke aata hai</strong>.
+    Ye poora process manual hai, aur DR ke liye ye jaanna zaroori hai.
+  </p>
+
+  <div class="note">
+    <div class="note-title">Pehle ek farq samajh lo</div>
+    <div class="table-wrap" style="margin:0">
+    <table>
+      <tbody>
+        <tr>
+          <td style="width:420px">General internet — CloudFront, PyPI, GitHub</td>
+          <td><span class="pill red">BAND</span></td>
+        </tr>
+        <tr>
+          <td>AWS endpoints — IoT Core, S3 — proxy ke through</td>
+          <td><span class="pill green">KHULA</span></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <p style="margin:10px 0 0">
+      Agar S3 reachable na hota to Greengrass hamare components <em>deploy hi nahi kar pata</em>.
+      Toh machine AWS se judi hui hai — bas ek controlled proxy ke through.
+      <strong>&ldquo;No internet&rdquo; ≠ &ldquo;no AWS&rdquo;.</strong>
+    </p>
+  </div>
+
+  <h4>Poora install flow</h4>
+
+  <ol class="steps">
+    <li>
+      <strong>Zip download karo — kisi aur machine par</strong>
+      <p>Internet-wali machine par AWS ke public CDN se:</p>
+      <pre style="margin:0"><code style="white-space:pre-wrap;word-break:break-all">https://d2s8p88vqu9w66.cloudfront.net/releases/greengrass-nucleus-latest.zip</code></pre>
+    </li>
+    <li>
+      <strong>Plant machine par stage karo</strong>
+      <p>OT ke approved transfer path se file ko <code>C:\Temp\</code> mein daalo.
+      Installer ka default <code>$SourcePath</code> yahi hai.</p>
+    </li>
+    <li>
+      <strong>PowerShell installer chalao</strong>
+      <p>Machine par, Administrator ke roop mein:</p>
+      <pre style="margin:0"><code style="white-space:pre-wrap;word-break:break-all">core-device-installer.ps1 -ConfigPath "C:\windfall_installers\wfp-prd-plp-shared-01.json"</code></pre>
+    </li>
+    <li>
+      <strong>Script baaki sab karta hai</strong>
+      <p><code>C:\Temp</code> se zip uthata hai &#8594; unzip &#8594; Java install &#8594;
+      certificate laata hai &#8594; <code>java -jar Greengrass.jar</code> chala kar
+      <code>C:\greengrass\v2</code> mein install karta hai &#8594; Windows service bana deta hai.</p>
+    </li>
+  </ol>
+
+  <h4>Code khud ye batata hai</h4>
+  <p>
+    Function ka naam <code>DownloadFile()</code> hai — par andar dekho, kuch download hota hi nahi:
+  </p>
+  <pre><code><span class="k">hidden</span> [<span class="n">void</span>] <span class="f">DownloadFile</span>([ArtifactUri] $ArtifactUri, [<span class="n">string</span>] $OutFile) {
+    <span class="c"># Nucleus is staged locally (offline/OT). Resolved to a full path in Paths.SetPaths.</span>
+    Write-Info <span class="s">"Copying locally staged nucleus zip: $($this.Paths.NucleusZipPath)..."</span>
+    Copy-Item $this.Paths.NucleusZipPath -Destination $OutFile -ErrorAction Stop
+}</code></pre>
+  <p>
+    Naam purana reh gaya — script pehle internet-connected machines ke liye likha gaya tha, phir
+    <strong>OT ke liye offline bana diya gaya</strong>. Java aur Root CA ke saath bhi wahi hua:
+  </p>
+  <pre><code><span class="c">#$this.DownloadFile([ArtifactUri]::AmazonRootCAUrl, ...) #! We embedded it in the script now</span>
+
+<span class="c">#! Java is installed directly from the locally-staged Corretto MSI in the source</span>
+<span class="c">#! folder (see InstallJava). No download/copy needed — there is no internet in OT.</span></code></pre>
+
+  <h4>Kya-kya pehle se stage karna padta hai</h4>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:290px">Cheez</th><th style="width:250px">Kahan se</th><th>Kahan rakhni hai</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>greengrass-nucleus-*.zip</code></td>
+        <td>AWS CloudFront</td>
+        <td><code>C:\Temp\</code> &mdash; glob se dhoondha jaata hai, exact version pin nahi hai</td>
+      </tr>
+      <tr>
+        <td><code>amazon-corretto-*-windows-x64.msi</code></td>
+        <td>Amazon Corretto</td>
+        <td><code>C:\Temp\</code> &mdash; fallback naam <code>corretto-25.0.4.7.1</code></td>
+      </tr>
+      <tr>
+        <td>AmazonRootCA1 certificate</td>
+        <td>&mdash;</td>
+        <td><strong>Script mein embedded hai</strong>, alag se nahi chahiye</td>
+      </tr>
+      <tr>
+        <td>Device cert + private key</td>
+        <td>Secrets Manager<br><code>/prod/wfp/plp-shared-01-iot-client-certificate</code></td>
+        <td>Script khud laata hai (<code>Uselocal: false</code>), ya JSON mein paste karo
+            (<code>Uselocal: true</code>)</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Version drift — dev aur prod alag Java par hain</div>
+    <div class="table-wrap" style="margin:0">
+    <table>
+      <tbody>
+        <tr><td style="width:300px">Dev &mdash; vagrant, Linux</td><td>Amazon Corretto <strong>11</strong></td></tr>
+        <tr><td>Prod &mdash; Windows Server</td><td>Amazon Corretto <strong>25</strong></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Jo repo nahi batata</div>
+    <p style="margin:0">
+      Zip <code>C:\Temp</code> tak <strong>pahunchti kaise hai</strong> — ye kahin likha nahi hai.
+      Jump host, approved file-transfer gateway, ya media — <strong>OT se poochhna padega</strong>.
+      Restore runbook likhne se pehle ye jaanna zaroori hai.
+    </p>
+  </div>
+
+  <div class="note danger">
+    <div class="note-title">Ticket ka connection — RTO yahin jaata hai</div>
+    <p>Device rebuild karne ka matlab hai ye poora manual process <strong>dobara</strong>:</p>
+    <ol class="body" style="margin:0 0 10px;padding-left:20px">
+      <li>OT change-control window</li>
+      <li>Machine tak access (remote ya physical)</li>
+      <li>Zip + MSI stage karna</li>
+      <li>Certificate laana</li>
+      <li>Installer chalana</li>
+      <li>Greengrass deployment ka intezaar</li>
+      <li><strong>Uske baad</strong> aapka state restore</li>
+    </ol>
+    <p style="margin:0">
+      Yahi wajah hai ki platform RTO <strong>1 ghanta</strong> hai par end-to-end RTO
+      <strong>4 ghante</strong>. Ye saare steps <a href="#plan">restore runbook</a> mein likhne
+      padenge — warna &ldquo;untested restore = no restore&rdquo;.
+    </p>
+  </div>
+
+  <h3>Nucleus — device ka &ldquo;operating system&rdquo;</h3>
+
+  <p>
+    Jab installer chalta hai, jo install hota hai wahi <strong>Nucleus</strong> hai. Baaki sab —
+    aapke chaar components, StreamManager, EMQX — uske <em>neeche</em> chalte hain.
+    Ek line mein: Nucleus device par <strong>systemd + package manager + message bus</strong>
+    teeno ka kaam ek saath karta hai.
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:60px">#</th><th style="width:200px">Kaam</th><th>Kya karta hai</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>1</strong></td>
+        <td>Deployments</td>
+        <td>IoT Core se connected rehta hai. Order aane par S3 se artifact zip download karta hai,
+            unzip karta hai, recipe padhta hai, components start karta hai.
+            <strong>Isiliye code S3 par safe hai</strong> — device wipe karke naya Greengrass install
+            karo, sab dobara aa jayega.</td>
+      </tr>
+      <tr>
+        <td><strong>2</strong></td>
+        <td>Component lifecycle</td>
+        <td>Recipe ka <code>Install</code> phir <code>Run</code> script chalata hai. Aur agar process
+            <strong>non-zero exit</strong> kare to <strong>restart</strong> kar deta hai.</td>
+      </tr>
+      <tr>
+        <td><strong>3</strong></td>
+        <td>Configuration inject karna</td>
+        <td><code>DefaultConfiguration</code> + deployment overrides merge karta hai, aur
+            <code>Setenv</code> block ke through <strong>environment variables</strong> bana deta hai.
+            Isiliye config badalne ke liye redeploy zaroori nahi — debug console se live badal sakte ho.</td>
+      </tr>
+      <tr>
+        <td><strong>4</strong></td>
+        <td>IPC broker</td>
+        <td><code>/cej/component/control</code> aur <code>cloudwatch/metric/put</code> wala local
+            pub/sub Nucleus deta hai — <strong>aur permissions bhi wahi enforce karta hai</strong>
+            (recipe ka <code>accessControl</code>). Ye EMQX se <em>alag</em> hai
+            (<a href="#mqtt">section 04</a>).</td>
+      </tr>
+      <tr>
+        <td><strong>5</strong></td>
+        <td>Dependencies resolve karna</td>
+        <td>Recipe mein sirf <code>aws.greengrass.StreamManager: ^2.0.0</code> likha hai. Nucleus usko
+            AWS catalog se khud download+install karta hai, aur <strong>pehle usko start</strong>
+            karta hai, phir aapka component.</td>
+      </tr>
+      <tr>
+        <td><strong>6</strong></td>
+        <td>Credentials + logs</td>
+        <td><strong>TES</strong> (Token Exchange Service) components ko temporary AWS credentials deta
+            hai bina keys hardcode kiye — <code>sync-metadata</code> ka <code>boto3</code> isi se
+            chalta hai. Aur har component ka stdout/stderr capture karke file mein daalta hai.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Point 2 code mein — deliberate crash</h4>
+  <p>Collector jaan-boojh kar crash karta hai taaki Nucleus use restart kar de:</p>
+  <pre><code><span class="k">if</span> worker_failed.is_set():
+    <span class="c"># Non-zero exit so Greengrass treats this as a failure and restarts.</span>
+    sys.exit(<span class="n">1</span>)</code></pre>
+  <p>
+    Ye ek zinda process chhodne se behtar hai jiska worker thread mar chuka ho aur jo kuch collect
+    hi na kar raha ho. Calculator bhi <code>stream_listener()</code> fail hone par yahi karta hai.
+  </p>
+
+  <h4>Nucleus supervisor hai, orchestrator nahi</h4>
+  <p>
+    Aam galatfehmi: log samajhte hain Nucleus poore pipeline ko coordinate karta hai. Nahi karta.
+    Chaaron recipes ki <code>ComponentDependencies</code> dekho:
+  </p>
+  <pre><code>collector      →  aws.greengrass.SecretManager
+data-filter    →  aws.greengrass.StreamManager
+vsr-calculator →  aws.greengrass.StreamManager
+sync-metadata  →  aws.greengrass.TokenExchangeService</code></pre>
+  <p>
+    <strong>Koi bhi component doosre <em>hamare</em> component par depend nahi karta</strong> —
+    sirf AWS wale declare kiye gaye hain. Nucleus ke liye ye chaar bilkul unrelated processes hain,
+    aur wo inhe <strong>kisi bhi order mein</strong> start kar sakta hai.
+  </p>
+
+  <div class="note">
+    <div class="note-title">Isiliye handshake application-level hai</div>
+    <p style="margin:0">
+      Startup order hamara Python khud sambhalta hai — metadata ka wait, PING/PONG, START
+      (<a href="#components">section 06</a>). Nucleus us IPC message ko sirf <em>deliver</em> karta
+      hai; usay pata nahi <code>START</code> ka matlab kya hai. Aur dependencies declare karne se bhi
+      kaam nahi banta: Nucleus ke liye &ldquo;process zinda hai&rdquo; kaafi hai, wo ye nahi jaan
+      sakta ki filter ne MQTT topic par subscribe kar liya ya nahi.
+    </p>
+  </div>
+
+  <p>
+    Isi tarah Nucleus <strong>data path mein hai hi nahi</strong>. Usne bas ye Python processes
+    spawn kiye the; uske baad data usko chhoota tak nahi:
+  </p>
+  <pre><code>PHD → collector → EMQX → data-filter → StreamManager → vsr-calculator → EMQX
+                    ↑
+              Nucleus yahan kahin nahi hai</code></pre>
+  <p style="margin-bottom:0">
+    Sirf <strong>IPC messages</strong> uske through jaate hain. Event data nahi.
+  </p>
+
+  <h3><code>C:\greengrass\v2</code> ke andar kya hai</h3>
+
+  <pre><code>C:\greengrass\v2\
+│
+├── <span class="k">bin\</span>                    <span class="c"># greengrass-cli</span>
+│
+├── <span class="k">logs\</span>
+│   ├── greengrass.log     <span class="c"># Nucleus ka apna log</span>
+│   └── &lt;component&gt;.log    <span class="c"># component ka stdout/stderr</span>
+│
+├── <span class="k">packages\</span>               <span class="c"># ✅ S3 se aaya code — restore hota hai</span>
+│
+└── <span class="k">work\</span>
+    └── &lt;ComponentName&gt;\   <span class="c"># ⚠ YAHIN state files hain — restore NAHI</span></code></pre>
+
+  <h3>Nucleus kya <em>nahi</em> karta — yahi aapka ticket hai</h3>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:50%">Nucleus restore karta hai</th><th>Nucleus restore <strong>nahi</strong> karta</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="pill green">✓</span> <code>packages\</code> — S3 se poora code</td>
+        <td><span class="pill red">✗</span> <code>work\</code> — cursor, dedup, in-flight strokes</td>
+      </tr>
+      <tr>
+        <td><span class="pill green">✓</span> Configuration — deployment se</td>
+        <td><span class="pill red">✗</span> Koi bhi runtime state</td>
+      </tr>
+      <tr>
+        <td><span class="pill green">✓</span> AWS-provided components — khud install</td>
+        <td><span class="pill red">✗</span> StreamManager ka buffered data</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note danger">
+    <div class="note-title">Ticket ka connection</div>
+    <p>
+      <code>work\</code> Nucleus ke liye sirf <strong>scratch space</strong> hai — usko pata hi nahi
+      ki usme aapka cursor rakha hai. Device gaya = <code>work\</code> gaya = cursor gaya =
+      <a href="#failure">permanent data gap</a>.
+    </p>
+    <p style="margin:0">
+      Aur Greengrass mein iska <strong>koi built-in option nahi</strong> hai. Isiliye backup component
+      banana pad raha hai — <a href="#plan">action plan</a> dekho.
+    </p>
+  </div>
 
   <h3>Zaroori concepts</h3>
   <div class="table-wrap">
   <table>
     <thead><tr><th style="width:170px">Concept</th><th>Matlab</th><th style="width:290px">Repo mein kahan</th></tr></thead>
     <tbody>
-      <tr><td><strong>Core device</strong></td><td>Wo machine jispar Greengrass install hai.</td><td><code>vagrant/</code> &mdash; local test VM</td></tr>
+      <tr><td><strong>Core device</strong></td><td>Wo machine jispar Greengrass install hai.</td><td>Prod: <code>wfp-prd-plp-shared-01</code><br>Dev: <code>vagrant/</code> VM</td></tr>
       <tr><td><strong>Component</strong></td><td>Ek deployable unit = code + recipe.</td><td>Har top-level folder</td></tr>
       <tr><td><strong>Recipe</strong></td><td>YAML manifest — config, dependencies, Install/Run scripts.</td><td><code>recipe.yaml</code></td></tr>
       <tr><td><strong>Artifact</strong></td><td>Packaged code (zip) jo S3 par rehta hai.</td><td><code>gdk-config.json</code> &#8594; bucket</td></tr>
       <tr><td><strong>Deployment</strong></td><td>Cloud ka order: "in components ko in versions par chalao".</td><td><code>.github/workflows/deployment.yml</code></td></tr>
-      <tr><td><strong>Work directory</strong></td><td><code>/greengrass/v2/work/&lt;name&gt;/</code> — component ka scratch space.</td><td><strong>Yahin state files banti hain</strong></td></tr>
+      <tr><td><strong>Work directory</strong></td><td><code>work\&lt;name&gt;\</code> — component ka scratch space.</td><td><strong>Yahin state files banti hain</strong></td></tr>
       <tr><td><strong>IPC</strong></td><td>Components aapas mein baat karte hain local pub/sub se.</td><td><code>services/ipc.py</code></td></tr>
+      <tr><td><strong>TES</strong></td><td>Token Exchange Service — components ko temporary AWS creds.</td><td><code>sync-metadata</code> ka <code>boto3</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────── 04 MQTT ──── -->
+<section id="mqtt">
+  <h2><span class="num">04</span>MQTT Broker — EMQX</h2>
+
+  <p>
+    <a href="#bigpicture">Fig 1</a> mein <code>collector</code> aur <code>data-filter</code> ke beech
+    jo <span class="mono-sm">MQTT 1883</span> label hai — wo koi library call nahi hai. Device par ek
+    <strong>alag process</strong> chal raha hai jo messages route karta hai. Uska naam
+    <strong>EMQX</strong> hai, aur poore edge pipeline ka <strong>do-tihaai traffic</strong> usi se
+    guzarta hai. Ye section batata hai wo cheez <em>hai kya</em>, <em>define kahan hai</em>, aur
+    <em>ticket ke liye kyun matter karti hai</em>.
+  </p>
+
+  <h3>EMQX hai kya</h3>
+
+  <p>
+    EMQX ek <strong>open-source MQTT broker</strong> hai (Erlang/OTP mein likha gaya). Kaam simple
+    hai — ek <em>message post office</em>: koi client ek <strong>topic</strong> par message
+    <strong>publish</strong> karta hai, doosre clients us topic ko <strong>subscribe</strong> karte
+    hain, aur broker beech mein deliver kar deta hai. Publisher aur subscriber ek doosre ko jaante hi
+    nahi — bas topic ka naam share karte hain.
+  </p>
+
+  <p>
+    Hamare case mein AWS ne EMQX ko ek <strong>Greengrass managed component</strong> ke roop mein
+    package kiya hai — <code>aws.greengrass.clientdevices.mqtt.EMQX</code>. Matlab hum broker install
+    nahi karte, uska code maintain nahi karte; deployment mein bas uska naam + version + config
+    likhte hain, aur Nucleus usko <strong>Docker container</strong> ki tarah utha deta hai.
+  </p>
+
+  <div class="grid c3">
+    <div class="card">
+      <h3 style="color:var(--purple)">Kya karta hai</h3>
+      <p style="margin:0">Topic-based pub/sub routing. In-memory. Local, plant ke andar —
+      internet ki koi zaroorat nahi.</p>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--amber)">Kya <em>nahi</em> karta</h3>
+      <p style="margin:0">Messages store nahi karta. Subscriber offline hai to message
+      <strong>gir jaata hai</strong>. Ye database nahi hai.</p>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--accent)">Kyun zaroori</h3>
+      <p style="margin:0">Components alag OS processes hain. Unke beech baat karne ka
+      ek common, language-neutral raasta chahiye.</p>
+    </div>
+  </div>
+
+  <h3>Define kahan hai — is repo mein nahi</h3>
+
+  <p>
+    Ye <strong>important</strong> hai: broker ka koi zikr <code>windfall-greengrass-components</code>
+    mein nahi milega. Wo <strong>doosre repo</strong>, <code>windfall-platform-automation</code>, ki
+    SiteWise-gateway CloudFormation templates mein define hai — har core device ke liye ek template:
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:380px">CloudFormation template</th><th style="width:180px">Kaunsa device</th>
+      <th>EMQX version</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><code>cf/iot_sitewise_gateway-plp-shared-01.cfn.yml</code></td><td>PLP <span class="pill red">prod</span></td><td><code>2.0.3</code></td></tr>
+      <tr><td><code>cf/iot_sitewise_gateway-aws-qa-01.cfn.yml</code></td><td>QA 01</td><td><code>2.0.3</code></td></tr>
+      <tr><td><code>cf/iot_sitewise_gateway-aws-qa-02.cfn.yml</code></td><td>QA 02</td><td><code>2.0.3</code></td></tr>
+      <tr><td><code>cf/iot_sitewise_gateway-aws-test-01.cfn.yml</code></td><td>Test 01</td><td><code>2.0.3</code></td></tr>
+      <tr><td><code>cf/iot_sitewise_gateway-aws-test-02.cfn.yml</code></td><td>Test 02</td><td><code>2.0.3</code></td></tr>
+      <tr><td><code>cf/iot_sitewise_gateway-lab-test-01.cfn.yml</code></td><td>Lab</td><td><code>2.0.3</code></td></tr>
     </tbody>
   </table>
   </div>
 
-  <div class="note warn">
-    <div class="note-title">Ticket ka connection</div>
+  <p>Har template mein wahi block hota hai — component ka naam, version, aur ek config merge:</p>
+
+  <pre><code>aws.greengrass.clientdevices.mqtt.EMQX:
+  ComponentVersion: <span class="s">2.0.3</span>
+  ConfigurationUpdate:
+    Merge: |
+      {
+        <span class="s">"emqxConfig"</span>: {
+          <span class="s">"authorization"</span>: { <span class="s">"no_match"</span>: <span class="s">"allow"</span> },        <span class="c"># ACL match nahi mila → allow</span>
+          <span class="s">"listeners"</span>: {
+            <span class="s">"tcp"</span>: { <span class="s">"default"</span>: { <span class="s">"enabled"</span>: true, <span class="s">"enable_authn"</span>: <span class="n">false</span> } },
+            <span class="s">"ssl"</span>: { <span class="s">"default"</span>: { <span class="s">"enabled"</span>: true, <span class="s">"enable_authn"</span>: <span class="n">true</span>  } }
+          },
+          <span class="s">"authentication"</span>: {
+            <span class="s">"backend"</span>: <span class="s">"built_in_database"</span>,      <span class="c"># users EMQX ke apne DB mein</span>
+            <span class="s">"mechanism"</span>: <span class="s">"password_based"</span>,
+            <span class="s">"password_hash_algorithm"</span>: { <span class="s">"name"</span>: <span class="s">"pbkdf2"</span>, <span class="s">"mac_fun"</span>: <span class="s">"sha512"</span> }
+          },
+          <span class="s">"dashboard"</span>: { <span class="s">"listeners"</span>: { <span class="s">"http"</span>: { <span class="s">"bind"</span>: <span class="n">18083</span> } } }
+        },
+        <span class="s">"authMode"</span>: <span class="s">"bypass"</span>,                    <span class="c"># GG client-device auth use nahi ho rahi</span>
+        <span class="s">"requiresPrivilege"</span>: <span class="s">"true"</span>,
+        <span class="s">"runAsUser"</span>: { <span class="s">"windowsUser"</span>: <span class="s">"ggc_user"</span> },
+        <span class="s">"brokerEndpoints"</span>: [ { <span class="s">"endpoint"</span>: <span class="s">"127.0.0.1"</span>, <span class="s">"port"</span>: <span class="n">8883</span> } ],
+        <span class="s">"dockerOptions"</span>: <span class="s">"-p 8883:8883 -p 1883:1883 -p 18083:18083 -v emqx-data:/opt/emqx/data …"</span>
+      }</code></pre>
+
+  <h4>Teen ports</h4>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th style="width:110px">Port</th><th style="width:160px">Kya</th><th style="width:150px">Auth?</th><th>Kaun use karta hai</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>1883</code> <span class="pill green">hamara</span></td>
+        <td>Plain TCP MQTT</td>
+        <td><code>enable_authn: false</code></td>
+        <td><strong>Hamare chaaron components</strong> — sab <code>127.0.0.1:1883</code> par</td>
+      </tr>
+      <tr>
+        <td><code>8883</code></td>
+        <td>MQTT over TLS</td>
+        <td><code>enable_authn: true</code><br><span class="mono-sm">verify_peer</span></td>
+        <td>External <em>client devices</em> (agar koi ho). Yahi <code>brokerEndpoints</code> mein advertise hota hai.</td>
+      </tr>
+      <tr>
+        <td><code>18083</code></td>
+        <td>EMQX web dashboard</td>
+        <td>admin login</td>
+        <td>Debugging — live connections/topics dekhne ke liye</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note tip">
+    <div class="note-title">Ye nuance yaad rakhna</div>
     <p style="margin:0">
-      Greengrass <strong>code redeploy kar deta hai</strong> (artifacts S3 par safe hain), lekin
-      <strong>work directory restore nahi karta</strong>. Device gaya = state gayi. Yahi gap hai.
+      Components ke recipe config mein <code>MQTT_USERNAME</code> set hai
+      (<code>cej-event-collector</code> waghairah) — <strong>lekin wo 1883 par connect karte hain,
+      jahan <code>enable_authn: false</code> hai</strong>. Matlab username bheja to jaata hai, par
+      broker usko <em>verify nahi karta</em>. Password authentication sirf TLS wale
+      <code>8883</code> par enforce hoti hai. Isliye agar EMQX ka user database kabhi khali bhi ho
+      jaaye, hamara pipeline chalta rahega.
     </p>
+  </div>
+
+  <h3>Kaun broker se kaise judta hai</h3>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:230px">Component</th><th style="width:210px"><code>MQTT_USERNAME</code></th>
+      <th style="width:160px">Password kahan se</th><th>Kya karta hai</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><code>windfall_cej_event_collector</code></td>
+        <td><code>cej-event-collector</code></td>
+        <td><code>mqtt_collector_pass</code></td>
+        <td><strong>publish</strong> &#8594; <code>cej/event/data</code></td>
+      </tr>
+      <tr>
+        <td><code>windfall_cej_event_data_filter</code></td>
+        <td><code>cej-event-data-filter</code></td>
+        <td><code>mqtt_datafilter_pass</code></td>
+        <td><strong>subscribe</strong> &#8592; <code>cej/event/data</code></td>
+      </tr>
+      <tr>
+        <td><code>windfall_cej_event_vsr_calculator</code></td>
+        <td><code>cej-event-vsr-calculator</code></td>
+        <td><code>mqtt_vsrcalc_pass</code></td>
+        <td><strong>publish</strong> &#8594; <code>/&lt;valve&gt;/RESULT</code> etc</td>
+      </tr>
+      <tr>
+        <td>&mdash; (broker admin)</td>
+        <td><code>admin</code></td>
+        <td><code>mqtt_cluster_pass</code></td>
+        <td>Dashboard / cluster management</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>
+    Passwords Secrets Manager ke <strong>app-config secret</strong> mein hain —
+    <code>/&lt;env&gt;/&lt;app&gt;/&lt;core-device&gt;/greengrass/appconfig</code> — wahi secret jismein
+    PHD ke DB credentials bhi hain. Device par usay
+    <code>aws.greengrass.SecretManager</code> component 60 minute par refresh karta hai.
+  </p>
+
+  <h3>Broker do alag kaam karta hai</h3>
+
+  <p>
+    Aam taur par log sochte hain broker sirf <em>collector &#8594; filter</em> wala hop hai. Actually
+    <strong>output path bhi</strong> usi broker se jaata hai — aur wo hissa zyada interesting hai.
+  </p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1120 400" role="img" aria-label="EMQX broker topology on the Greengrass core device">
+      <defs>
+        <marker id="fmq" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
+        </marker>
+        <marker id="fmg" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+          <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-g"/>
+        </marker>
+      </defs>
+
+      <rect x="15" y="26" width="1090" height="316" rx="10" class="svg-zone"/>
+      <text x="30" y="46" class="svg-t-lbl">GREENGRASS CORE DEVICE &#183; localhost only</text>
+
+      <!-- broker -->
+      <rect x="428" y="62" width="264" height="256" rx="8" class="svg-box-p"/>
+      <text x="560" y="94"  class="svg-t-b" text-anchor="middle" style="font-size:18px">EMQX</text>
+      <text x="560" y="114" class="svg-t-s" text-anchor="middle">MQTT broker &#183; v2.0.3</text>
+      <text x="560" y="132" class="svg-t-s" text-anchor="middle" style="fill:var(--text-dim)">Docker container</text>
+
+      <rect x="452" y="150" width="216" height="94" rx="6" class="svg-box"/>
+      <text x="560" y="172" class="svg-t-s" text-anchor="middle">127.0.0.1</text>
+      <text x="560" y="194" class="svg-t-s" text-anchor="middle" style="fill:var(--green)">1883 &#183; tcp &#183; no authn</text>
+      <text x="560" y="214" class="svg-t-s" text-anchor="middle">8883 &#183; tls &#183; authn</text>
+      <text x="560" y="234" class="svg-t-s" text-anchor="middle" style="fill:var(--text-dim)">18083 &#183; dashboard</text>
+
+      <text x="560" y="272" class="svg-t-lbl" text-anchor="middle" style="fill:var(--amber)">NO PERSISTENCE</text>
+      <text x="560" y="292" class="svg-t-lbl" text-anchor="middle" style="fill:var(--purple)">AWS-PROVIDED COMPONENT</text>
+
+      <!-- row 1 : input path -->
+      <rect x="40" y="96" width="200" height="60" rx="6" class="svg-box-a"/>
+      <text x="140" y="120" class="svg-t-b" text-anchor="middle">collector</text>
+      <text x="140" y="138" class="svg-t-s" text-anchor="middle">publisher</text>
+
+      <rect x="880" y="96" width="200" height="60" rx="6" class="svg-box-a"/>
+      <text x="980" y="120" class="svg-t-b" text-anchor="middle">data-filter</text>
+      <text x="980" y="138" class="svg-t-s" text-anchor="middle">subscriber</text>
+
+      <line x1="240" y1="126" x2="422" y2="126" class="svg-line-a" marker-end="url(#fmq)"/>
+      <text x="331" y="116" class="svg-t-lbl" text-anchor="middle">cej/event/data</text>
+
+      <line x1="692" y1="126" x2="874" y2="126" class="svg-line-a" marker-end="url(#fmq)"/>
+      <text x="783" y="116" class="svg-t-lbl" text-anchor="middle">deliver</text>
+
+      <!-- row 2 : output path -->
+      <rect x="40" y="238" width="200" height="60" rx="6" class="svg-box-a"/>
+      <text x="140" y="262" class="svg-t-b" text-anchor="middle">vsr-calculator</text>
+      <text x="140" y="280" class="svg-t-s" text-anchor="middle">publisher</text>
+
+      <rect x="880" y="238" width="200" height="60" rx="6" class="svg-box-p"/>
+      <text x="980" y="258" class="svg-t-b" text-anchor="middle">SiteWise Edge</text>
+      <text x="980" y="276" class="svg-t-s" text-anchor="middle">Edge Publisher</text>
+      <text x="980" y="292" class="svg-t-lbl" text-anchor="middle" style="fill:var(--purple);font-size:10px">AWS</text>
+
+      <line x1="240" y1="268" x2="422" y2="268" class="svg-line-g" marker-end="url(#fmg)"/>
+      <text x="331" y="258" class="svg-t-lbl" text-anchor="middle">/&lt;valve&gt;/RESULT &#215;4</text>
+
+      <line x1="692" y1="268" x2="874" y2="268" class="svg-line-g" marker-end="url(#fmg)"/>
+      <text x="783" y="258" class="svg-t-lbl" text-anchor="middle">topic = property alias</text>
+
+      <!-- labels -->
+      <text x="30" y="80"  class="svg-t-lbl" style="fill:var(--accent)">1 &#183; INPUT PATH &#8212; raw PHD events</text>
+      <text x="30" y="222" class="svg-t-lbl" style="fill:var(--green)">2 &#183; OUTPUT PATH &#8212; calculated results</text>
+    </svg>
+    <figcaption>Fig 4 &mdash; Ek hi broker, do bilkul alag raaste. Upar wala internal bus hai,
+    neeche wala effectively hamara &ldquo;SiteWise API&rdquo; hai.</figcaption>
+  </figure>
+
+  <div class="grid c2">
+    <div class="card accent">
+      <h3>1 &middot; Internal event bus</h3>
+      <p><code>collector</code> har 60 second PHD se rows nikaal kar
+      <code>cej/event/data</code> par daalta hai; <code>data-filter</code> wahi sun raha hota hai.</p>
+      <p style="margin:0">Yahan broker sirf ek <strong>pipe</strong> hai — do processes ke beech.</p>
+    </div>
+    <div class="card">
+      <h3>2 &middot; Output path = SiteWise ka &ldquo;API&rdquo;</h3>
+      <p><code>vsr-calculator</code> SiteWise ka koi API call <strong>nahi</strong> karta. Wo bas
+      MQTT par publish karta hai, jahan <strong>topic ka naam hi property alias hai</strong>:</p>
+      <pre style="margin:0"><code>self.mqtt.publish(property_alias, payload)
+<span class="c"># topic = "/34UV202/RESULT"</span></code></pre>
+      <p style="margin:10px 0 0">SiteWise Edge Publisher usi broker ko sun raha hai, alias se asset
+      property dhoondta hai, aur cloud par sync kar deta hai.</p>
+    </div>
+  </div>
+
+  <div class="note tip">
+    <div class="note-title">Dono raaste ek hi process se guzarte hain</div>
+    <p style="margin:0">
+      Ek hi EMQX instance internal bus <em>aur</em> SiteWise output dono handle karta hai. Matlab
+      broker gir gaya to sirf ingestion nahi rukti &mdash; <strong>results publish hona bhi ruk
+      jaata hai</strong>. Alias-based publish ka detail
+      <a href="#bigpicture">output contract</a> mein hai.
+    </p>
+  </div>
+
+  <h3>Device par chaar transports hain — confuse mat hona</h3>
+
+  <p>
+    EMQX akela nahi hai. Core device par <strong>chaar alag messaging mechanisms</strong> chal rahe
+    hain, aur teeno ke owner alag hain. Ye table sabse zyada kaam aayega:
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:210px">Transport</th><th style="width:250px">Kaun deta hai</th>
+      <th style="width:130px">Durable?</th><th>Kis ke beech</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>MQTT</strong><br><code>cej/event/data</code></td>
+        <td><code>…clientdevices.mqtt.EMQX</code><br><span class="mono-sm">Docker container</span></td>
+        <td><span class="pill red">NAHI</span></td>
+        <td>collector &#8594; data-filter</td>
+      </tr>
+      <tr>
+        <td><strong>MQTT</strong><br><code>/&lt;valve&gt;/RESULT</code></td>
+        <td>wahi EMQX broker</td>
+        <td><span class="pill red">NAHI</span></td>
+        <td>vsr-calculator &#8594; SiteWise Edge Publisher</td>
+      </tr>
+      <tr>
+        <td><strong>IPC</strong><br><code>/cej/component/control</code></td>
+        <td>Greengrass Nucleus <span class="mono-sm">built-in</span></td>
+        <td><span class="pill red">NAHI</span></td>
+        <td>collector &#8596; data-filter (START/STOP)</td>
+      </tr>
+      <tr>
+        <td><strong>StreamManager</strong><br><code>VSR_STREAM</code></td>
+        <td><code>aws.greengrass.StreamManager</code></td>
+        <td><span class="pill green">HAAN</span><br><span class="mono-sm">disk-backed</span></td>
+        <td>data-filter &#8594; vsr-calculator</td>
+      </tr>
+      <tr>
+        <td><strong>MQTT Bridge</strong><br><code>cej/event/data-replica</code></td>
+        <td><code>…clientdevices.mqtt.Bridge</code></td>
+        <td><span class="pill amber">Nucleus spooler</span></td>
+        <td>collector &#8594; <strong>AWS IoT Core</strong> (cloud)</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <div class="note-title">Bridge ≠ broker</div>
+    <p style="margin:0">
+      <code>aws.greengrass.clientdevices.mqtt.Bridge</code> alag component hai. Wo broker
+      <em>nahi</em> hai — wo sirf <strong>local &#8594; cloud forwarder</strong> hai. Gateway CFN mein
+      uska mapping sirf ek topic ke liye hai:
+      <code>cej/event/data-replica</code> (<code>Pubsub</code> &#8594; <code>IotCore</code>) —
+      ye CEJ data-replica workstream ke liye hai, VSR ke liye nahi.
+      <strong>VSR ka koi bhi data is bridge se cloud nahi jaata</strong>; VSR results SiteWise Edge
+      Publisher ke through jaate hain.
+    </p>
+  </div>
+
+  <h3>Ticket ke liye kya matter karta hai</h3>
+
+  <div class="note warn">
+    <div class="note-title">1 &middot; Zero persistence — isiliye startup handshake hai</div>
+    <p style="margin:0">
+      Broker messages store nahi karta. Agar <code>collector</code> publish karna shuru kar de aur
+      <code>data-filter</code> abhi subscribe hi na hua ho, wo events <strong>hamesha ke liye
+      gayab</strong> — aur cursor aage badh chuka hoga, to PHD se dobara bhi nahi milenge.
+      Yahi wajah hai ki collector khud se start nahi hota; filter pehle ready hota hai, phir
+      IPC par <code>START</code> bhejta hai. <a href="#components">Fig 5</a> dekho.
+    </p>
+  </div>
+
+  <div class="note ok">
+    <div class="note-title">2 &middot; Broker down ho jaaye to data loss nahi hota</div>
+    <p style="margin:0">
+      Collector ka <a href="#state">two-phase commit</a> yahan bachata hai: publish fail =
+      <strong>cursor commit nahi hota</strong>, aur agli poll par wahi batch dobara padha jaata hai.
+      Matlab broker outage <em>throughput</em> rokta hai, <em>data</em> nahi.
+      Ye <a href="#failure">scenario B/D</a> jaisa hi behaviour hai.
+    </p>
+  </div>
+
+  <div class="note danger">
+    <div class="note-title">3 &middot; Docker ek chhupi hui dependency hai</div>
+    <p style="margin:0">
+      EMQX Docker container mein chalta hai. Agar device par Docker install/running nahi hai, gateway
+      <strong>deployment successful dikhega</strong> par broker runtime par fail hoga — aur poora
+      pipeline chup-chaap ruk jaayega. Isliye
+      <code>install_scripts/core-device-installer.ps1</code> mein ek explicit pre-flight
+      <code>ValidateDocker()</code> warning hai. Host rebuild karte waqt (DR scenario A) ye step
+      <strong>runbook mein hona chahiye</strong>.
+    </p>
+  </div>
+
+  <div class="note">
+    <div class="note-title">4 &middot; Backup scope mein <em>nahi</em> hai</div>
+    <p style="margin:0">
+      Broker hamari state nahi rakhta — in-flight messages sirf RAM mein hote hain, aur uska apna
+      data <code>emqx-data</code> Docker volume mein alag rehta hai (users/ACL).
+      Us volume mein hamara koi business data nahi hai, aur components 1883 par
+      <em>bina auth</em> connect karte hain — to volume ka backup lena
+      <strong>zaroori nahi</strong>. Backup component ka scope sirf chaar components ki
+      work-directory state files hai.
+    </p>
+  </div>
+
+  <h4>Kafka kyun nahi?</h4>
+  <p>
+    Wajib sawaal — aur jawab hai <strong>ye edge hai, cloud nahi</strong>. EMQX ek Docker container
+    hai; Kafka ke liye JVM broker + HA ke liye multiple nodes chahiye, jo ek plant gateway par
+    practical nahi. Aur MQTT hi wo protocol hai jo SiteWise, IoT Core aur field devices sab natively
+    bolte hain. Jahan durable, replayable log chahiye — wahan is design mein pehle se
+    <strong>StreamManager</strong> (edge) aur <strong>Kinesis/SQS</strong> (cloud) use ho rahe hain.
+    Isliye broker ko Kafka banne ki zaroorat hi nahi hai.
+  </p>
+
+  <div class="srcline">
+    <a class="src" href="../windfall-platform-automation/workstreams/windfall-platform/cf/iot_sitewise_gateway-plp-shared-01.cfn.yml">automation/cf/iot_sitewise_gateway-plp-shared-01.cfn.yml</a>
+    <a class="src" href="../windfall-platform-automation/workstreams/windfall-platform/install_scripts/core-device-installer.ps1">automation/install_scripts/core-device-installer.ps1</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-collector/services/mqtt.py">collector/services/mqtt.py</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/services/sitewise.py">calculator/services/sitewise.py</a>
   </div>
 </section>
 
-<!-- ────────────────────────────────────────────────────────── 04 PHD ──── -->
+<!-- ────────────────────────────────────────────────────────── 05 PHD ──── -->
 <section id="phd">
-  <h2><span class="num">04</span>PHD Buffer — data kahan se aata hai</h2>
+  <h2><span class="num">05</span>PHD Buffer — data kahan se aata hai</h2>
 
   <p>
     <strong>PHD</strong> = Process History Database, Honeywell <em>Uniformance</em> ka product
@@ -620,7 +1429,7 @@ DB_PORT:       <span class="s">"1433"</span></code></pre>
 
 <!-- ────────────────────────────────────────────────────── 05 COMPONENTS ── -->
 <section id="components">
-  <h2><span class="num">05</span>The 4 Components</h2>
+  <h2><span class="num">06</span>The 4 Components</h2>
 
   <h3>Pehle ek confusion door — &ldquo;repo&rdquo; nahi, &ldquo;component&rdquo;</h3>
   <p>
@@ -919,7 +1728,7 @@ sequence_tracker.commit()       <span class="c"># tabhi cursor aage</span></code
       <text x="850" y="316" class="svg-t-b" text-anchor="middle">PHD polling shuru</text>
       <text x="850" y="332" class="svg-t-s" text-anchor="middle">60 s loop</text>
     </svg>
-    <figcaption>Fig 4 &mdash; Boot handshake. Filter pehle metadata ka wait karta hai, phir collector ko chaalu karta hai.</figcaption>
+    <figcaption>Fig 5 &mdash; Boot handshake. Filter pehle metadata ka wait karta hai, phir collector ko chaalu karta hai.</figcaption>
   </figure>
 
   <div class="note tip">
@@ -929,6 +1738,7 @@ sequence_tracker.commit()       <span class="c"># tabhi cursor aage</span></code
       publish karna shuru kar de aur filter abhi subscribe hi na hua ho, wo events
       <strong>hamesha ke liye gayab</strong>. Isliye handshake: filter pehle stream banata hai,
       metadata load karta hai, subscribe karta hai — <em>tabhi</em> collector ko START bhejta hai.
+      Broker ki poori tafseel <a href="#mqtt">section 04</a> mein hai.
     </p>
   </div>
 
@@ -959,8 +1769,9 @@ sequence_tracker.commit()       <span class="c"># tabhi cursor aage</span></code
     <tbody>
       <tr>
         <td>Local MQTT broker<br><code>cej/event/data</code></td>
-        <td>Greengrass Nucleus / Moquette</td>
-        <td>Koi persistence nahi — isiliye handshake zaroori hai</td>
+        <td><code>&hellip;clientdevices.mqtt.EMQX</code><br><span class="mono-sm">Docker container</span></td>
+        <td>Koi persistence nahi — isiliye handshake zaroori hai.
+            <a href="#mqtt">Detail</a></td>
       </tr>
       <tr>
         <td><code>VSR_STREAM</code></td>
@@ -1033,7 +1844,7 @@ sequence_tracker.commit()       <span class="c"># tabhi cursor aage</span></code
 
 <!-- ────────────────────────────────────────────────────────── 06 DOMAIN ── -->
 <section id="domain">
-  <h2><span class="num">06</span>Valve Domain Logic</h2>
+  <h2><span class="num">07</span>Valve Domain Logic</h2>
 
   <h3>Stroke kya hai?</h3>
   <p>
@@ -1115,7 +1926,7 @@ sequence_tracker.commit()       <span class="c"># tabhi cursor aage</span></code
 
 <!-- ─────────────────────────────────────────────────── 07 STATE MACHINE ── -->
 <section id="statemachine">
-  <h2><span class="num">07</span>State Machine — CSV se chalti hai</h2>
+  <h2><span class="num">08</span>State Machine — CSV se chalti hai</h2>
 
   <p>
     Har valve type ki apni <strong>transition table</strong> ek CSV file mein hai. Code hardcoded
@@ -1204,7 +2015,7 @@ CLOSE,TRIGGER,TRIP,CLOSE,<span class="n">ALREADY_SAFE</span></code></pre>
       <path d="M880,226 C866,292 964,292 950,230" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f4a)"/>
       <text x="915" y="316" class="svg-t-lbl" text-anchor="middle">TRIGGER:TRIP &#8594; ALREADY_SAFE</text>
     </svg>
-    <figcaption>Fig 5 &mdash; OPEN_3M valve, trip se close tak. Do raaste kyunki SR aur LIFT kisi bhi order mein aa sakte hain.</figcaption>
+    <figcaption>Fig 6 &mdash; OPEN_3M valve, trip se close tak. Do raaste kyunki SR aur LIFT kisi bhi order mein aa sakte hain.</figcaption>
   </figure>
 
   <div class="note tip">
@@ -1254,7 +2065,7 @@ TO_CLOSE_SR_PENDING,LIFT,FALSE,CLOSE,<span class="n">TRIP_TIME</span></code></pr
 
 <!-- ───────────────────────────────────────────────────────── 08 GRADING ── -->
 <section id="grading">
-  <h2><span class="num">08</span>Grading &amp; Outputs</h2>
+  <h2><span class="num">09</span>Grading &amp; Outputs</h2>
 
   <p>
     Stroke complete hone par time nikalta hai, phir usko valve ke apne thresholds
@@ -1317,7 +2128,7 @@ TO_CLOSE_SR_PENDING,LIFT,FALSE,CLOSE,<span class="n">TRIP_TIME</span></code></pr
       <text x="876" y="308" class="svg-t-s" text-anchor="middle">MART</text>
       <text x="60"  y="308" class="svg-t-s" text-anchor="start">0</text>
     </svg>
-    <figcaption>Fig 6 &mdash; Upar: stroke ka start/end. Neeche: stroke time ko kaise grade kiya jaata hai.</figcaption>
+    <figcaption>Fig 7 &mdash; Upar: stroke ka start/end. Neeche: stroke time ko kaise grade kiya jaata hai.</figcaption>
   </figure>
 
   <h4>Grading logic (verbatim)</h4>
@@ -1378,7 +2189,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
 
 <!-- ───────────────────────────────────────────────────────── 09 STATE ──── -->
 <section id="state">
-  <h2><span class="num">09</span>State &amp; Durability — ticket ka dil</h2>
+  <h2><span class="num">10</span>State &amp; Durability — ticket ka dil</h2>
 
   <p>
     Ye section sabse important hai. Har component <strong>local disk</strong> par state likhta hai,
@@ -1447,7 +2258,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
       <text x="944" y="301" class="svg-t-s" text-anchor="middle">versioned + SSE-KMS bucket</text>
       <text x="944" y="317" class="svg-t-s" text-anchor="middle">state.tar.gz + latest pointer</text>
     </svg>
-    <figcaption>Fig 7 &mdash; State inventory aur wo gap jo ticket fix karega.</figcaption>
+    <figcaption>Fig 8 &mdash; State inventory aur wo gap jo ticket fix karega.</figcaption>
   </figure>
 
   <h3>Ground truth table</h3>
@@ -1509,11 +2320,15 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
 
   <div class="note warn">
     <div class="note-title">Naming trap — backup script likhte waqt dhyan</div>
-    <p style="margin:0">
+    <p>
       <strong>Directory</strong> mein underscore hai (<code>ComponentName</code>), <strong>filename</strong>
-      mein hyphen (<code>COMPONENT_ID</code>):<br>
-      <code style="white-space:normal">/greengrass/v2/work/windfall_cej_event_collector/cej-event-collector_state.pkl</code>
+      mein hyphen (<code>COMPONENT_ID</code>):
     </p>
+    <pre style="margin:0"><code><span class="c"># PROD — Windows Server (dekho section 03)</span>
+C:\greengrass\v2\work\windfall_cej_event_collector\cej-event-collector_state.pkl
+
+<span class="c"># DEV — vagrant Linux VM</span>
+/greengrass/v2/work/windfall_cej_event_collector/cej-event-collector_state.pkl</code></pre>
   </div>
 
   <div class="note danger">
@@ -1562,7 +2377,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
       <path d="M360,116 C360,170 200,170 120,124" class="svg-line-r" marker-end="url(#f7r)"/>
       <text x="330" y="188" class="svg-t-lbl" text-anchor="middle" style="fill:var(--red)">crash / publish fail &#8594; batch dobara padho, cursor nahi hila</text>
     </svg>
-    <figcaption>Fig 8 &mdash; Cursor tabhi aage badhta hai jab output confirm ho jaaye. At-least-once delivery.</figcaption>
+    <figcaption>Fig 9 &mdash; Cursor tabhi aage badhta hai jab output confirm ho jaaye. At-least-once delivery.</figcaption>
   </figure>
 
   <div class="note ok">
@@ -1579,7 +2394,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
 
 <!-- ─────────────────────────────────────────────────────── 10 FAILURE ─── -->
 <section id="failure">
-  <h2><span class="num">10</span>Failure Modes — kya kab hota hai</h2>
+  <h2><span class="num">11</span>Failure Modes — kya kab hota hai</h2>
 
   <div class="table-wrap">
   <table>
@@ -1662,7 +2477,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
 
 <!-- ────────────────────────────────────────────────────────── 11 DR GAP ── -->
 <section id="drgap">
-  <h2><span class="num">11</span>DR Doc vs Code — kya theek karna hai</h2>
+  <h2><span class="num">12</span>DR Doc vs Code — kya theek karna hai</h2>
 
   <p>
     <code>VSR-Edge-Disaster-Recovery.md</code> ko code ke against verify kiya. Ye list review mein
@@ -1751,7 +2566,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
 
 <!-- ───────────────────────────────────────────────────────────── 12 PLAN ── -->
 <section id="plan">
-  <h2><span class="num">12</span>Action Plan — kaise aage badhna hai</h2>
+  <h2><span class="num">13</span>Action Plan — kaise aage badhna hai</h2>
 
   <ol class="steps">
     <li>
@@ -1850,7 +2665,7 @@ MART, MATT, MERT, TABLE, SR, TRIGGER, LIFT
 
 <!-- ──────────────────────────────────────────────────────────── 13 CICD ── -->
 <section id="cicd">
-  <h2><span class="num">13</span>Build &amp; Deploy</h2>
+  <h2><span class="num">14</span>Build &amp; Deploy</h2>
 
   <p>Model hai <strong>build once, promote</strong> — same artifact Dev &#8594; QA &#8594; Prod jaata hai,
   rebuild nahi hota.</p>
@@ -1897,7 +2712,7 @@ python gg.py get-password        <span class="c"># local debug console</span></c
 
 <!-- ─────────────────────────────────────────────────────── 14 REPO MAP ── -->
 <section id="repomap">
-  <h2><span class="num">14</span>Repo Map</h2>
+  <h2><span class="num">15</span>Repo Map</h2>
 
   <pre><code>windfall-greengrass-components/
 │
@@ -1946,7 +2761,7 @@ python gg.py get-password        <span class="c"># local debug console</span></c
 
 <!-- ──────────────────────────────────────────────────── 15 CHEAT SHEET ── -->
 <section id="cheatsheet">
-  <h2><span class="num">15</span>Cheat Sheet</h2>
+  <h2><span class="num">16</span>Cheat Sheet</h2>
 
   <div class="grid c2">
     <div class="card">
@@ -1962,7 +2777,12 @@ ls -la /greengrass/v2/work/&lt;ComponentName&gt;/
 
 <span class="c"># local debug console</span>
 greengrass-cli get-debug-password
-<span class="c"># then https://localhost:1441</span></code></pre>
+<span class="c"># then https://localhost:1441</span>
+
+<span class="c"># MQTT broker (EMQX runs as a container)</span>
+docker ps --filter name=emqx
+docker logs -f &lt;emqx-container&gt;
+<span class="c"># dashboard: http://localhost:18083</span></code></pre>
     </div>
     <div class="card">
       <h3>Repo par tests</h3>
@@ -1987,6 +2807,8 @@ pytest tests/test_cursor_commit.py -v</code></pre>
       <tr><td>Collector max batch</td><td><code>5 000</code> rows</td><td>must be &lt; dedup capacity</td></tr>
       <tr><td>HS completion timeout</td><td><code>5 min</code></td><td><code>hs_lifecycle.py</code></td></tr>
       <tr><td>StreamManager buffer</td><td><code>~256 MB</code></td><td>SDK default &mdash; <strong>unconfigured</strong></td></tr>
+      <tr><td>MQTT broker (components)</td><td><code>127.0.0.1:1883</code></td><td>EMQX, plain TCP, no authn</td></tr>
+      <tr><td>MQTT broker (client devices)</td><td><code>8883</code> TLS &#183; <code>18083</code> dash</td><td>gateway CFN &mdash; <code>dockerOptions</code></td></tr>
       <tr><td>Proposed backup cadence</td><td><code>5 min</code></td><td>DR doc &sect;4.1</td></tr>
       <tr><td>Platform RTO target</td><td><code>1 hr</code></td><td>DR doc &sect;1.3</td></tr>
       <tr><td>End-to-end RTO target</td><td><code>4 hr</code></td><td>incl. OT hardware MTTR</td></tr>
