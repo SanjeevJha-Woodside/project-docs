@@ -162,7 +162,7 @@
   <h3>Part A — Edge pipeline (plant ke andar)</h3>
 
   <figure class="fig">
-    <svg viewBox="0 0 1160 290" role="img" aria-label="Edge pipeline diagram">
+    <svg viewBox="0 0 1160 352" role="img" aria-label="Edge pipeline diagram with per-box ownership">
       <defs>
         <marker id="f1a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
           <path d="M0,0 L7,3.2 L0,6.4 z" class="svg-fill-a"/>
@@ -172,65 +172,206 @@
         </marker>
       </defs>
 
-      <rect x="15" y="30" width="1130" height="238" rx="10" class="svg-zone"/>
+      <rect x="15" y="30" width="1130" height="276" rx="10" class="svg-zone"/>
       <text x="30" y="50" class="svg-t-lbl">OT ENVIRONMENT · PLUTO LNG PLANT</text>
 
-      <rect x="182" y="66" width="953" height="192" rx="8" class="svg-zone"/>
+      <rect x="182" y="66" width="953" height="230" rx="8" class="svg-zone"/>
       <text x="196" y="84" class="svg-t-lbl">GREENGRASS CORE DEVICE &#8212; /greengrass/v2</text>
 
       <!-- PHD -->
-      <rect x="28" y="104" width="138" height="58" rx="6" class="svg-box-m"/>
-      <text x="97" y="128" class="svg-t-b" text-anchor="middle">PHD Buffer</text>
-      <text x="97" y="146" class="svg-t-s" text-anchor="middle">SQL Server</text>
+      <rect x="28" y="108" width="138" height="76" rx="6" class="svg-box-m"/>
+      <text x="97" y="132" class="svg-t-b" text-anchor="middle">PHD Buffer</text>
+      <text x="97" y="150" class="svg-t-s" text-anchor="middle">SQL Server</text>
+      <text x="97" y="171" class="svg-t-lbl" text-anchor="middle" style="fill:var(--amber);font-size:10px">OT · HONEYWELL</text>
 
       <!-- collector -->
-      <rect x="205" y="104" width="145" height="58" rx="6" class="svg-box-a"/>
-      <text x="277" y="127" class="svg-t-b" text-anchor="middle">collector</text>
-      <text x="277" y="145" class="svg-t-s" text-anchor="middle">cursor + poll</text>
+      <rect x="205" y="108" width="145" height="76" rx="6" class="svg-box-a"/>
+      <text x="277" y="132" class="svg-t-b" text-anchor="middle">collector</text>
+      <text x="277" y="150" class="svg-t-s" text-anchor="middle">cursor + poll</text>
+      <text x="277" y="171" class="svg-t-lbl" text-anchor="middle" style="fill:var(--accent);font-size:10px">HAMARA CODE</text>
 
       <!-- filter -->
-      <rect x="385" y="104" width="145" height="58" rx="6" class="svg-box-a"/>
-      <text x="457" y="127" class="svg-t-b" text-anchor="middle">data-filter</text>
-      <text x="457" y="145" class="svg-t-s" text-anchor="middle">tag match + dedup</text>
+      <rect x="385" y="108" width="145" height="76" rx="6" class="svg-box-a"/>
+      <text x="457" y="132" class="svg-t-b" text-anchor="middle">data-filter</text>
+      <text x="457" y="150" class="svg-t-s" text-anchor="middle">tag match + dedup</text>
+      <text x="457" y="171" class="svg-t-lbl" text-anchor="middle" style="fill:var(--accent);font-size:10px">HAMARA CODE</text>
 
       <!-- stream -->
-      <rect x="565" y="104" width="145" height="58" rx="6" class="svg-box-b"/>
-      <text x="637" y="127" class="svg-t-b" text-anchor="middle">VSR_STREAM</text>
-      <text x="637" y="145" class="svg-t-s" text-anchor="middle">StreamManager</text>
+      <rect x="565" y="108" width="145" height="76" rx="6" class="svg-box-p"/>
+      <text x="637" y="132" class="svg-t-b" text-anchor="middle">VSR_STREAM</text>
+      <text x="637" y="150" class="svg-t-s" text-anchor="middle">StreamManager</text>
+      <text x="637" y="171" class="svg-t-lbl" text-anchor="middle" style="fill:var(--purple);font-size:10px">AWS-PROVIDED</text>
 
       <!-- calculator -->
-      <rect x="745" y="104" width="145" height="58" rx="6" class="svg-box-a"/>
-      <text x="817" y="127" class="svg-t-b" text-anchor="middle">vsr-calculator</text>
-      <text x="817" y="145" class="svg-t-s" text-anchor="middle">state machine</text>
+      <rect x="745" y="108" width="145" height="76" rx="6" class="svg-box-a"/>
+      <text x="817" y="132" class="svg-t-b" text-anchor="middle">vsr-calculator</text>
+      <text x="817" y="150" class="svg-t-s" text-anchor="middle">state machine</text>
+      <text x="817" y="171" class="svg-t-lbl" text-anchor="middle" style="fill:var(--accent);font-size:10px">HAMARA CODE</text>
 
       <!-- out -->
-      <rect x="925" y="104" width="185" height="58" rx="6" class="svg-box-g"/>
-      <text x="1017" y="127" class="svg-t-b" text-anchor="middle">SiteWise Edge</text>
-      <text x="1017" y="145" class="svg-t-s" text-anchor="middle">MQTT publish</text>
+      <rect x="925" y="108" width="185" height="76" rx="6" class="svg-box-p"/>
+      <text x="1017" y="132" class="svg-t-b" text-anchor="middle">SiteWise Edge</text>
+      <text x="1017" y="150" class="svg-t-s" text-anchor="middle">Edge Publisher</text>
+      <text x="1017" y="171" class="svg-t-lbl" text-anchor="middle" style="fill:var(--purple);font-size:10px">AWS-PROVIDED</text>
 
       <!-- arrows -->
-      <line x1="166" y1="133" x2="199" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
-      <line x1="350" y1="133" x2="379" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
-      <line x1="530" y1="133" x2="559" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
-      <line x1="710" y1="133" x2="739" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
-      <line x1="890" y1="133" x2="919" y2="133" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="166" y1="146" x2="199" y2="146" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="350" y1="146" x2="379" y2="146" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="530" y1="146" x2="559" y2="146" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="710" y1="146" x2="739" y2="146" class="svg-line-a" marker-end="url(#f1a)"/>
+      <line x1="890" y1="146" x2="919" y2="146" class="svg-line-a" marker-end="url(#f1a)"/>
 
-      <text x="182" y="98"  class="svg-t-lbl" text-anchor="middle">ODBC 60s</text>
-      <text x="364" y="98"  class="svg-t-lbl" text-anchor="middle">MQTT</text>
-      <text x="545" y="98"  class="svg-t-lbl" text-anchor="middle">append</text>
-      <text x="724" y="98"  class="svg-t-lbl" text-anchor="middle">read</text>
-      <text x="905" y="98"  class="svg-t-lbl" text-anchor="middle">result</text>
+      <text x="182" y="102"  class="svg-t-lbl" text-anchor="middle">ODBC 60s</text>
+      <text x="364" y="102"  class="svg-t-lbl" text-anchor="middle">MQTT 1883</text>
+      <text x="545" y="102"  class="svg-t-lbl" text-anchor="middle">append</text>
+      <text x="724" y="102"  class="svg-t-lbl" text-anchor="middle">read</text>
+      <text x="905" y="102"  class="svg-t-lbl" text-anchor="middle">publish</text>
 
       <!-- sync-metadata -->
-      <rect x="490" y="200" width="300" height="44" rx="6" class="svg-box-p"/>
-      <text x="640" y="220" class="svg-t-b" text-anchor="middle">sync-metadata</text>
-      <text x="640" y="236" class="svg-t-s" text-anchor="middle">SiteWise &#8594; valve metadata CSV</text>
+      <rect x="470" y="212" width="340" height="76" rx="6" class="svg-box-a"/>
+      <text x="640" y="236" class="svg-t-b" text-anchor="middle">sync-metadata</text>
+      <text x="640" y="254" class="svg-t-s" text-anchor="middle">SiteWise &#8594; valve metadata CSV</text>
+      <text x="640" y="275" class="svg-t-lbl" text-anchor="middle" style="fill:var(--accent);font-size:10px">HAMARA CODE</text>
 
-      <line x1="560" y1="200" x2="470" y2="168" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f1m)"/>
-      <line x1="720" y1="200" x2="805" y2="168" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f1m)"/>
+      <line x1="560" y1="212" x2="470" y2="188" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f1m)"/>
+      <line x1="720" y1="212" x2="810" y2="188" class="svg-line" stroke-dasharray="4 4" marker-end="url(#f1m)"/>
+
+      <!-- legend -->
+      <rect x="30"  y="318" width="20" height="15" rx="3" class="svg-box-a"/>
+      <text x="58"  y="330" class="svg-t-lbl">HAMARA CODE &#8212; is repo mein (4 components)</text>
+      <rect x="430" y="318" width="20" height="15" rx="3" class="svg-box-p"/>
+      <text x="458" y="330" class="svg-t-lbl">AWS-PROVIDED &#8212; code hamara nahi</text>
+      <rect x="790" y="318" width="20" height="15" rx="3" class="svg-box-m"/>
+      <text x="818" y="330" class="svg-t-lbl">OT / HONEYWELL &#8212; sirf read access</text>
     </svg>
-    <figcaption>Fig 1 &mdash; Edge pipeline. Solid = event data flow. Dashed = valve configuration metadata.</figcaption>
+    <figcaption>Fig 1 &mdash; Edge pipeline. Solid = event data flow. Dashed = valve configuration metadata.
+    Box ka rang batata hai <strong>kiska code hai</strong>.</figcaption>
   </figure>
+
+  <h3>Har box ka owner — kya hamara hai, kya nahi</h3>
+
+  <p>
+    Diagram ke saat boxes mein se sirf <strong>chaar</strong> is repo mein hain. Baaki
+    <strong>black box</strong> hain — hum unka source dekh bhi nahi sakte, sirf unse
+    <em>baat</em> karte hain ek fixed contract par. Ye Greengrass ka poora point hai:
+    infrastructure vendor de, hum sirf business logic likhein.
+  </p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th style="width:190px">Box</th><th style="width:170px">Owner</th>
+      <th>Code / config kahan rehta hai</th><th style="width:110px">Source hamare paas?</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>PHD Buffer</strong><br><span class="mono-sm">SQL Server</span></td>
+        <td>OT team<br><span class="mono-sm">Honeywell Uniformance</span></td>
+        <td>Vendor product, OT-managed server. Hamare paas sirf <code>dbreader</code> ka
+            read-only access hai <code>VW_EVENT_DATA</code> view par.</td>
+        <td><span class="pill red">NAHI</span></td>
+      </tr>
+      <tr>
+        <td><code>collector</code></td>
+        <td>Fuse <span class="pill green">hum</span></td>
+        <td><code>windfall-cej-event-collector/</code></td>
+        <td><span class="pill green">HAAN</span></td>
+      </tr>
+      <tr>
+        <td><strong>MQTT broker</strong><br><span class="mono-sm">127.0.0.1:1883</span></td>
+        <td>AWS</td>
+        <td>SiteWise Edge gateway ke saath install hota hai. CloudFormation se provision hota hai —
+            <code>windfall-platform-automation</code> mein.</td>
+        <td><span class="pill red">NAHI</span></td>
+      </tr>
+      <tr>
+        <td><code>data-filter</code></td>
+        <td>Fuse <span class="pill green">hum</span></td>
+        <td><code>windfall-cej-event-data-filter/</code></td>
+        <td><span class="pill green">HAAN</span></td>
+      </tr>
+      <tr>
+        <td><code>VSR_STREAM</code></td>
+        <td>AWS</td>
+        <td>Recipe mein sirf <strong>ek dependency line</strong> hai —
+            <code>aws.greengrass.StreamManager: ^2.0.0</code>. Nucleus khud install kar deta hai.
+            Hum sirf Python SDK se <code>append_message()</code> / <code>read_messages()</code> call karte hain.</td>
+        <td><span class="pill red">NAHI</span></td>
+      </tr>
+      <tr>
+        <td><code>vsr-calculator</code></td>
+        <td>Fuse <span class="pill green">hum</span></td>
+        <td><code>windfall-cej-event-vsr-calculator/</code></td>
+        <td><span class="pill green">HAAN</span></td>
+      </tr>
+      <tr>
+        <td><strong>SiteWise Edge</strong><br><span class="mono-sm">Edge Publisher</span></td>
+        <td>AWS</td>
+        <td>Gateway par chalta hai, CFN se provisioned. Broker ko sunta hai aur cloud par sync karta hai.</td>
+        <td><span class="pill red">NAHI</span></td>
+      </tr>
+      <tr>
+        <td><code>sync-metadata</code></td>
+        <td>Fuse <span class="pill green">hum</span></td>
+        <td><code>windfall-cej-sync-metadata/</code></td>
+        <td><span class="pill green">HAAN</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Do contracts jo sab kuch jodte hain</h4>
+  <p>
+    Jab dono sire black box hain, to system tabhi chalta hai jab <strong>contract</strong> clear ho.
+    Yahan sirf do hain:
+  </p>
+
+  <div class="grid c2">
+    <div class="card">
+      <h3>Input contract &mdash; PHD ki taraf</h3>
+      <p style="margin-bottom:10px">Hamara code PHD se &ldquo;baat&rdquo; nahi karta. Bas ek read-only
+      <code>SELECT</code> maarta hai aur 5 columns expect karta hai:</p>
+      <pre style="margin:0"><code>UF_EVENT_DATA_ID   <span class="c"># dedup key</span>
+ACTUAL_TIME        <span class="c"># event kab hua</span>
+REC_UPD_DATE       <span class="c"># cursor isi par</span>
+EVENT_NAME         <span class="c"># kaunsa tag</span>
+VALUE1             <span class="c"># TRIP/NORMAL, TRUE/FALSE</span></code></pre>
+    </div>
+    <div class="card accent">
+      <h3>Output contract &mdash; SiteWise ki taraf</h3>
+      <p style="margin-bottom:10px">Yahan asli trick hai: hamara code <strong>SiteWise ka koi API call
+      nahi karta</strong>. MQTT <strong>topic ka naam hi property alias hai</strong>:</p>
+      <pre style="margin:0"><code>self.mqtt.publish(property_alias, json.dumps(payload))
+<span class="c">#                 ↑ topic = "/34UV202/RESULT"</span></code></pre>
+      <p style="margin:10px 0 0">Payload SiteWise ka standard
+      <code>PutAssetPropertyValueEntry</code> format hota hai. Edge Publisher usi broker ko sun raha
+      hai, alias se asset property dhoondta hai, aur cloud par bhej deta hai.</p>
+    </div>
+  </div>
+
+  <div class="note tip">
+    <div class="note-title">Isiliye calculator mein <code>boto3</code> hai hi nahi</div>
+    <p style="margin:0">
+      Poora publish path sirf MQTT hai. Ekmatra component jo AWS SDK use karta hai wo
+      <code>sync-metadata</code> hai — kyunki usay SiteWise se <em>padhna</em> hota hai.
+      Isiliye backup component ke liye <a href="#plan">wahi template</a> hai.
+    </p>
+  </div>
+
+  <div class="note warn">
+    <div class="note-title">Dev mein PHD hota hi nahi</div>
+    <p style="margin:0">
+      Collector recipe ka default <code>DB_URL</code> ek <strong>AWS RDS SQL Server</strong> hai
+      (<code>windfall-np-platform-mssql…rds.amazonaws.com</code>), asli plant PHD nahi. Dev/QA mein
+      PHD ka stand-in chalta hai. Local testing ke liye <code>vagrant/</code> folder poora Greengrass
+      core + SiteWise Edge gateway khada karta hai.
+    </p>
+  </div>
+  <div class="srcline">
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/services/sitewise.py">calculator/services/sitewise.py</a>
+    <a class="src" href="../windfall-greengrass-components/windfall-cej-event-vsr-calculator/recipe.yaml">calculator/recipe.yaml</a>
+    <a class="src" href="../windfall-greengrass-components/vagrant/README.md">vagrant/README.md</a>
+  </div>
 
   <h3>Part B — Cloud path (result ke baad)</h3>
 
